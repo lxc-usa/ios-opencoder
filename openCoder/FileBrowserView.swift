@@ -192,20 +192,28 @@ struct FileBrowserView: View {
 
     private func importFiles(_ urls: [URL]) {
         var count = 0
+        var skippedHidden = 0
         for url in urls {
             guard url.startAccessingSecurityScopedResource() else { continue }
             defer { url.stopAccessingSecurityScopedResource() }
             let dest = directory.appendingPathComponent(url.lastPathComponent)
+            // 曾被移出列表的文件名：跳过导入，保持隐藏，不"复活"记录
+            if documents.isHiddenLocalFile(dest) {
+                skippedHidden += 1
+                continue
+            }
             if (try? FileManager.default.copyItem(at: url, to: dest)) != nil {
-                documents.unhideLocalFile(dest)
                 count += 1
             }
         }
         reload()
         if count > 0 {
             ToastCenter.shared.show("已导入 \(count) 个文件")
-        } else if !urls.isEmpty {
+        } else if !urls.isEmpty && skippedHidden == 0 {
             fail("导入失败：文件已存在或无法读取")
+        }
+        if skippedHidden > 0 {
+            ToastCenter.shared.show("已跳过 \(skippedHidden) 个曾移出列表的文件")
         }
     }
 }

@@ -149,11 +149,13 @@ final class DocumentManager: ObservableObject {
     }
 
     /// 相对 Documents 根目录的路径（稳定标识，不随当前浏览目录变化）。
+    /// 统一做 NFC 规范化，避免"同名不同 Unicode 写法"产生幽灵副本。
     private func relativeLocalPath(_ url: URL) -> String? {
         let root = Self.documentsDirectory.standardized.path
         let p = url.standardized.path
         guard p == root || p.hasPrefix(root + "/") else { return nil }
-        return p == root ? "." : String(p.dropFirst(root.count + 1))
+        let rel = p == root ? "." : String(p.dropFirst(root.count + 1))
+        return rel.precomposedStringWithCanonicalMapping
     }
 
     /// 该 URL 是否已被用户从列表移除。
@@ -176,6 +178,6 @@ final class DocumentManager: ObservableObject {
 
     private func loadHiddenLocalFiles() {
         let saved = UserDefaults.standard.stringArray(forKey: "opencoder.hiddenLocalFiles") ?? []
-        hiddenLocalPaths = Set(saved)
+        hiddenLocalPaths = Set(saved.map { $0.precomposedStringWithCanonicalMapping })
     }
 }
