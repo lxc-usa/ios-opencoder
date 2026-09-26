@@ -1,128 +1,133 @@
 import SwiftUI
+import SwiftTerm
 
-/// SSH 命令控制台：输入命令、执行并查看合并输出。
-/// 注意：每条命令在独立 channel 中执行，无持久 shell（cd 等状态不保留）。
+/// 交互式 SSH 终端：PTY + xterm 仿真，可直接交互。
+///
+/// - 打开即进入远端 login shell，cd/环境变量等状态保留，可 apt/yum 安装程序
+/// - 支持 top/htop/vi 等全屏程序（ANSI 转义、备用屏幕、光标定位由 SwiftTerm 仿真）
+/// - 键盘上方自带 Esc/Ctrl/方向键/Tab 快捷栏（SwiftTerm TerminalAccessory）
+/// - 离开页面时会话结束（发送 exit）
 @MainActor
 struct TerminalView: View {
     let serverID: UUID
     @ObservedObject var servers: ServerStore
     @ObservedObject var settings: SettingsStore
+    @Environment(\.colorScheme) private var colorScheme
 
-    @State private var command = ""
-    @State private var lines: [TerminalLine] = []
-    @State private var isRunning = false
-    @State private var showInfo = false
-
-    private var outputFont: Font {
-        settings.monoFont.font(size: settings.monoFontSize)
-    }
+    @StateObject private var shell = InteractiveShell()
 
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 3) {
-                        if lines.isEmpty {
-                            Text("输入下方命令并运行，如：ls -la")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .padding(.top, 8)
-                        }
-                        ForEach(lines) { line in
-                            Text(line.text)
-                                .font(outputFont)
-                                .lineSpacing(settings.lineSpacing)
-                                .foregroundColor(line.isError ? .red : (line.isCommand ? .accentColor : .primary))
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .id(line.id)
-                        }
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                }
-                .onChange(of: lines.count) { _, _ in
-                    if let last = lines.last {
-                        withAnimation {
-                            proxy.scrollTo(last.id, anchor: .bottom)
-                        }
-                    }
-                }
-            }
-            Divider()
-            HStack(spacing: 8) {
-                TextField("输入命令", text: $command)
-                    .textFieldStyle(.roundedBorder)
-                    .font(outputFont)
-                    .textInputAutocapitalization(.never)
-                    .disableAutocorrection(true)
-                    .onSubmit(run)
-                    .disabled(isRunning)
-                if isRunning {
+        Group {
+            switch shell.state {
+            case .connecting:
+                VStack(spacing: 12) {
                     ProgressView()
-                } else {
-                    Button("运行", action: run)
-                        .buttonStyle(.borderedProminent)
-                        .disabled(command.trimmingCharacters(in: .whitespaces).isEmpty)
+                    Text("正在连接…")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .connected:
+                TerminalHostView(shell: shell, settings: settings, colorScheme: colorScheme)
+            case .failed(let message):
+                EmptyState(
+                    icon: "wifi.exclamationmark",
+                    title: "连接失败",
+                    message: message,
+                    actionTitle: "重试",
+                    action: connect
+                )
+            case .ended:
+                EmptyState(
+                    icon: "terminal",
+                    title: "会话已结束",
+                    message: "远端 shell 已退出",
+                    actionTitle: "重新连接",
+                    action: connect
+                )
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
         }
-        .navigationTitle("SSH 命令")
+        .navigationTitle("SSH 终端")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItemGroup(placement: .navigationBarTrailing) {
-                Button {
-                    lines.removeAll()
-                } label: {
-                    Image(systemName: "trash")
-                }
-                .disabled(lines.isEmpty || isRunning)
-                Button {
-                    showInfo = true
-                } label: {
-                    Image(systemName: "info.circle")
-                }
-            }
-        }
-        .popover(isPresented: $showInfo) {
-            Text("每条命令在独立通道中执行，不保留 cd 等状态；输出为命令的标准输出与标准错误的合并结果。")
-                .font(.callout)
-                .padding()
-                .presentationCompactAdaptation(.popover)
-        }
+        .onAppear(perform: connect)
+        .onDisappear { shell.stop() }
     }
 
-    private func run() {
-        guard let server = servers.server(id: serverID) else {
-            lines.append(TerminalLine(text: "服务器不存在", isCommand: false, isError: true))
-            return
-        }
-        let cmd = command.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !cmd.isEmpty else { return }
-        command = ""
-        lines.append(TerminalLine(text: "$ " + cmd, isCommand: true, isError: false))
-        isRunning = true
-        Task {
-            do {
-                let result = try await SSHManager.shared.runCommand(server: server, command: cmd)
-                lines.append(TerminalLine(
-                    text: result.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "(无输出)" : result,
-                    isCommand: false,
-                    isError: false
-                ))
-            } catch {
-                lines.append(TerminalLine(text: "错误：\(error.localizedDescription)", isCommand: false, isError: true))
-            }
-            isRunning = false
-        }
+    private func connect() {
+        guard let server = servers.server(id: serverID) else { return }
+        shell.start(server: server)
     }
 }
 
-private struct TerminalLine: Identifiable {
-    let id = UUID()
-    let text: String
-    let isCommand: Bool
-    let isError: Bool
+/// SwiftTerm iOS TerminalView 的 SwiftUI 封装。
+///
+/// 注意：SwiftTerm 也有个 `TerminalView`（UIView），这里用 `SwiftTerm.TerminalView` 显式区分。
+@MainActor
+private struct TerminalHostView: UIViewRepresentable {
+    @ObservedObject var shell: InteractiveShell
+    var settings: SettingsStore
+    var colorScheme: ColorScheme
+
+    func makeUIView(context: Context) -> SwiftTerm.TerminalView {
+        let tv = SwiftTerm.TerminalView(frame: .zero, font: terminalUIFont())
+        applyAppearance(to: tv)
+        tv.terminalDelegate = context.coordinator
+        // 远端输出 → xterm 仿真器（InteractiveShell 保证主线程回调）
+        shell.onData = { bytes in
+            tv.feed(byteArray: ArraySlice(bytes))
+        }
+        // 打开即聚焦，可直接打字
+        DispatchQueue.main.async {
+            tv.becomeFirstResponder()
+        }
+        return tv
+    }
+
+    func updateUIView(_ tv: SwiftTerm.TerminalView, context: Context) {
+        let want = terminalUIFont()
+        if tv.font.pointSize != want.pointSize || tv.font.fontName != want.fontName {
+            tv.font = want
+        }
+        applyAppearance(to: tv)
+    }
+
+    private func terminalUIFont() -> UIFont {
+        settings.monoFont.uiFont(size: CGFloat(settings.monoFontSize))
+    }
+
+    private func applyAppearance(to tv: SwiftTerm.TerminalView) {
+        let dark = colorScheme == .dark
+        tv.nativeForegroundColor = dark ? .white : .black
+        tv.nativeBackgroundColor = dark ? .black : .white
+        tv.keyboardAppearance = dark ? .dark : .light
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(shell: shell)
+    }
+
+    @MainActor
+    final class Coordinator: NSObject, TerminalViewDelegate {
+        private let shell: InteractiveShell
+
+        init(shell: InteractiveShell) {
+            self.shell = shell
+        }
+
+        /// 用户按键 → SSH 通道。
+        func send(source: SwiftTerm.TerminalView, data: ArraySlice<UInt8>) {
+            shell.send(Array(data))
+        }
+
+        /// 视图尺寸变化 → 通知远端 PTY（top/vi 重排版靠它）。
+        func sizeChanged(source: SwiftTerm.TerminalView, newCols: Int, newRows: Int) {
+            shell.resize(cols: newCols, rows: newRows)
+        }
+
+        func setTerminalTitle(source: SwiftTerm.TerminalView, title: String) {}
+        func hostCurrentDirectoryUpdate(source: SwiftTerm.TerminalView, directory: String?) {}
+        func scrolled(source: SwiftTerm.TerminalView, position: Double) {}
+        func requestOpenLink(source: SwiftTerm.TerminalView, link: String, params: [String: String]) {}
+        func rangeChanged(source: SwiftTerm.TerminalView, startY: Int, endY: Int) {}
+    }
 }
