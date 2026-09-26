@@ -214,10 +214,16 @@ fileprivate extension ByteBuffer {
 // MARK: - SecKey 构造（X.509 SPKI）
 
 /// 把 SSH 的 (e, n) 组装成 SecKey 可用的 RSA 公钥。
+/// 注意：DER 组装全程使用 [UInt8] 数组、最后一次性转 Data，绝不对 Data 做
+/// removeFirst/insert 等原地修改。
+/// 2026-09-26 真机崩溃根因（openCoder-2026-09-26-130435.ips）：
+/// iOS 26 的 Foundation 里，Data.removeFirst/insert 经
+/// InlineSlice.replaceSubrange 时触发 EXC_BREAKPOINT（Swift precondition），
+/// 发生在握手验签服务器 RSA 主机密钥的 derInteger 路径上。
 private enum RSASecKey {
     static func publicKey(modulus n: Data, exponent e: Data) -> SecKey? {
         guard !n.isEmpty, !e.isEmpty else { return nil }
-        let spki = spkiDER(modulus: n, exponent: e)
+        let spki = Data(spkiBytes(modulus: Array(n), exponent: Array(e)))
         let attrs: [CFString: Any] = [
             kSecAttrKeyType: kSecAttrKeyTypeRSA,
             kSecAttrKeyClass: kSecAttrKeyClassPublic,
@@ -229,42 +235,47 @@ private enum RSASecKey {
         return key
     }
 
-    private static func derLength(_ count: Int) -> Data {
+    private static func derLengthBytes(_ count: Int) -> [UInt8] {
         precondition(count >= 0)
-        if count < 128 {
-            return Data([UInt8(count)])
-        }
+        if count < 128 { return [UInt8(count)] }
         var len = count
         var bytes: [UInt8] = []
         while len > 0 {
             bytes.insert(UInt8(len & 0xFF), at: 0)
             len >>= 8
         }
-        return Data([UInt8(0x80 | bytes.count)] + bytes)
+        return [UInt8(0x80 | bytes.count)] + bytes
     }
 
-    private static func derInteger(_ raw: Data) -> Data {
+    private static func derIntegerBytes(_ raw: [UInt8]) -> [UInt8] {
         // SSH mpint 本来就是大端补码，与 DER INTEGER 的字节规则一致；
-        // 这里只做规范化：去掉多余前导零，正数高位为 1 时补 0x00。
-        var bytes = raw
-        while bytes.count > 1 && bytes.first == 0x00 { bytes.removeFirst() }
-        guard let first = bytes.first else { return Data([0x02, 0x01, 0x00]) }
-        if first & 0x80 != 0 { bytes.insert(0x00, at: 0) }
-        return Data([0x02]) + derLength(bytes.count) + bytes
+        // 这里只做规范化：去掉多余前导零（至少保留 1 字节），
+        // 正数高位为 1 时补 0x00。
+        guard !raw.isEmpty else { return [0x02, 0x01, 0x00] }
+        var start = 0
+        while start + 1 < raw.count && raw[start] == 0x00 {
+            start += 1
+        }
+        let needsPad = raw[start] & 0x80 != 0
+        var out: [UInt8] = [0x02]
+        out.append(contentsOf: derLengthBytes((raw.count - start) + (needsPad ? 1 : 0)))
+        if needsPad { out.append(0x00) }
+        out.append(contentsOf: raw[start...])
+        return out
     }
 
-    private static func derSequence(_ body: Data) -> Data {
-        Data([0x30]) + derLength(body.count) + body
+    private static func derSequenceBytes(_ body: [UInt8]) -> [UInt8] {
+        [0x30] + derLengthBytes(body.count) + body
     }
 
-    private static func spkiDER(modulus n: Data, exponent e: Data) -> Data {
+    private static func spkiBytes(modulus n: [UInt8], exponent e: [UInt8]) -> [UInt8] {
         // PKCS#1 RSAPublicKey ::= SEQUENCE { modulus INTEGER, publicExponent INTEGER }
-        let pkcs1 = derSequence(derInteger(n) + derInteger(e))
+        let pkcs1 = derSequenceBytes(derIntegerBytes(n) + derIntegerBytes(e))
         // AlgorithmIdentifier ::= SEQUENCE { OID rsaEncryption (1.2.840.113549.1.1.1), NULL }
         let oidRSA: [UInt8] = [0x06, 0x09, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x01, 0x01]
-        let algId = derSequence(Data(oidRSA) + Data([0x05, 0x00]))
+        let algId = derSequenceBytes(oidRSA + [0x05, 0x00])
         // BIT STRING 包裹 PKCS#1（首字节 0x00 表示无未用比特）
-        let bitString = Data([0x03]) + derLength(pkcs1.count + 1) + Data([0x00]) + pkcs1
-        return derSequence(algId + bitString)
+        let bitString = [0x03] + derLengthBytes(pkcs1.count + 1) + [0x00] + pkcs1
+        return derSequenceBytes(algId + bitString)
     }
 }

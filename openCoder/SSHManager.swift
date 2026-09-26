@@ -244,9 +244,7 @@ actor SSHManager {
         ])
         sshAlgorithms.publicKeyAlgorihtms = .add([
             (RSASSHHostKey.self, RSASHA256Signature.self),
-            (RSASHA256AdvertisedKey.self, RSASHA512Signature.self),
-            // RSASHA512Signature 会被重复注册一次（NIOSSH 只按公钥类型去重），
-            // 无害：签名解析按前缀匹配，第一个命中即返回。
+            (RSASHA256AdvertisedKey.self, RSASHA256Signature.self),
             (RSASHA512AdvertisedKey.self, RSASHA512Signature.self),
         ])
         settings.algorithms = sshAlgorithms
