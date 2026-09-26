@@ -41,12 +41,14 @@ jobs:
       - name: Resolve Swift packages
         run: |
           xcodebuild -resolvePackageDependencies \
+            -skipPackagePluginValidation \
             -project openCoder.xcodeproj \
             -scheme openCoder
 
       - name: Build (unsigned)
         run: |
           xcodebuild -project openCoder.xcodeproj \
+            -skipPackagePluginValidation \
             -scheme openCoder \
             -configuration Release \
             -destination 'generic/platform=iOS' \
