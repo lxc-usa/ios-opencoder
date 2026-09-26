@@ -43,14 +43,14 @@ enum DSSpace {
 struct SettingRow<Trailing: View>: View {
     let icon: String
     let iconTint: Color
-    let title: String
+    let title: LocalizedStringKey
     let titleColor: Color
     @ViewBuilder let trailing: () -> Trailing
 
     init(
         icon: String,
         iconTint: Color = DSColors.accent,
-        title: String,
+        title: LocalizedStringKey,
         titleColor: Color = DSColors.foreground,
         @ViewBuilder trailing: @escaping () -> Trailing
     ) {
@@ -92,7 +92,7 @@ extension SettingRow where Trailing == Text {
 
 extension SettingRow where Trailing == AnyView {
     /// 导航行：右侧为 chevron。
-    init(icon: String, iconTint: Color = DSColors.accent, title: String) {
+    init(icon: String, iconTint: Color = DSColors.accent, title: LocalizedStringKey) {
         self.init(icon: icon, iconTint: iconTint, title: title) {
             AnyView(
                 Image(systemName: "chevron.right")
@@ -117,10 +117,10 @@ struct SettingDivider: View {
 /// 带标题的分组卡片，替代 Form 的 Section。
 @MainActor
 struct DSGroupCard<Content: View>: View {
-    let title: String?
+    let title: LocalizedStringKey?
     @ViewBuilder let content: Content
 
-    init(title: String? = nil, @ViewBuilder content: () -> Content) {
+    init(title: LocalizedStringKey? = nil, @ViewBuilder content: () -> Content) {
         self.title = title
         self.content = content()
     }
