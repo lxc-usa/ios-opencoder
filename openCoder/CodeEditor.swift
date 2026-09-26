@@ -64,7 +64,7 @@ struct CodeEditor: UIViewRepresentable {
             self.parent = parent
         }
 
-        func textViewDidChange(_ textView: TextView) {
+        @MainActor func textViewDidChange(_ textView: TextView) {
             let newText = textView.text
             if parent.text != newText {
                 parent.text = newText

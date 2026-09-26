@@ -15,6 +15,7 @@ import TreeSitterHTMLRunestone
 import TreeSitterJavaRunestone
 import TreeSitterJavaScriptRunestone
 import TreeSitterJSONRunestone
+import TreeSitterJSON5Runestone
 import TreeSitterJuliaRunestone
 import TreeSitterLaTeXRunestone
 import TreeSitterLuaRunestone

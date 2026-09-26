@@ -51,7 +51,7 @@ struct SettingRow<Trailing: View>: View {
         iconTint: Color = DSColors.accent,
         title: String,
         titleColor: Color = DSColors.foreground,
-        @ViewBuilder trailing: () -> Trailing
+        @ViewBuilder @escaping trailing: () -> Trailing
     ) {
         self.icon = icon
         self.iconTint = iconTint
@@ -89,7 +89,7 @@ extension SettingRow where Trailing == Text {
     }
 }
 
-extension SettingRow where Trailing == Image {
+extension SettingRow {
     /// 导航行：右侧为 chevron。
     init(icon: String, iconTint: Color = DSColors.accent, title: String) {
         self.init(icon: icon, iconTint: iconTint, title: title) {

@@ -1,4 +1,5 @@
 import SwiftUI
+import Runestone
 
 /// 编辑器宿主：顶部标签页条 + Runestone 编辑器。
 struct EditorHostView: View {
