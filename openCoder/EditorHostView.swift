@@ -57,21 +57,43 @@ struct EditorHostView: View {
     // MARK: - 标签页条
 
     private var tabStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(documents.documents) { doc in
-                    TabButton(
-                        doc: doc,
-                        isSelected: documents.selectedID == doc.id,
-                        onSelect: { documents.selectedID = doc.id },
-                        onClose: { requestClose(doc) }
-                    )
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(documents.documents) { doc in
+                        TabButton(
+                            doc: doc,
+                            isSelected: documents.selectedID == doc.id,
+                            onSelect: { documents.selectedID = doc.id },
+                            onClose: { requestClose(doc) }
+                        )
+                        .id(doc.id)
+                    }
                 }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .background(Color(.systemGroupedBackground))
+            .onAppear {
+                scrollToSelectedSoon(proxy, animated: false)
+            }
+            .onChange(of: documents.selectedID) { _, _ in
+                scrollToSelectedSoon(proxy, animated: true)
+            }
         }
-        .background(Color(.systemGroupedBackground))
+    }
+
+    /// 把标签页条滚动到当前选中的标签，保证活跃文件始终可见。
+    /// 用 Task 跳一拍：刚打开文件时新标签还没完成布局，直接 scrollTo 会滚不到。
+    private func scrollToSelectedSoon(_ proxy: ScrollViewProxy, animated: Bool) {
+        Task {
+            guard let id = documents.selectedID else { return }
+            if animated {
+                withAnimation { proxy.scrollTo(id, anchor: .center) }
+            } else {
+                proxy.scrollTo(id, anchor: .center)
+            }
+        }
     }
 
     // MARK: - 编辑区
