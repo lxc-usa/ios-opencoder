@@ -75,7 +75,7 @@ struct ServerListView: View {
                     TerminalSessionCache.shared.discard(serverID: server.id)
                     Task {
                         await SSHManager.shared.disconnect(serverID: server.id)
-                        ToastCenter.shared.show("已删除服务器")
+                        ToastCenter.shared.show(String(localized: "已删除服务器"))
                     }
                 }
                 pendingDelete = nil

@@ -150,7 +150,7 @@ struct SettingsView: View {
                 Button("断开", role: .destructive) {
                     Task {
                         await SSHManager.shared.disconnectAll()
-                        ToastCenter.shared.show("已断开所有连接")
+                        ToastCenter.shared.show(String(localized: "已断开所有连接"))
                     }
                 }
                 Button("取消", role: .cancel) {}

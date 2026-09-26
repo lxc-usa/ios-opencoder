@@ -45,7 +45,7 @@ struct TerminalView: View {
                 EmptyState(
                     icon: "wifi.exclamationmark",
                     title: "连接失败",
-                    message: message,
+                    message: "\(message)",
                     actionTitle: "重试",
                     action: connect
                 )

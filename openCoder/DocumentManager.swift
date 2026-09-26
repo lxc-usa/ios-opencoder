@@ -5,7 +5,7 @@ enum DocumentError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .serverGone: return "服务器配置已删除，无法保存"
+        case .serverGone: return String(localized: "服务器配置已删除，无法保存")
         }
     }
 }
@@ -88,11 +88,12 @@ final class DocumentManager: ObservableObject {
     /// 在 Documents 下新建一个空文件并打开。
     func newFile() {
         let base = Self.documentsDirectory
-        var url = base.appendingPathComponent("未命名.txt")
+        let untitled = String(localized: "未命名")
+        var url = base.appendingPathComponent("\(untitled).txt")
         var index = 1
         while FileManager.default.fileExists(atPath: url.path) {
             index += 1
-            url = base.appendingPathComponent("未命名\(index).txt")
+            url = base.appendingPathComponent("\(untitled)\(index).txt")
         }
         try? "".write(to: url, atomically: true, encoding: .utf8)
         openLocalFile(url: url)

@@ -15,35 +15,35 @@ enum SSHManagerError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingPassword:
-            return "Keychain 中没有该服务器的密码，请重新编辑服务器并填写密码"
+            return String(localized: "Keychain 中没有该服务器的密码，请重新编辑服务器并填写密码")
         case .hostKeyMismatch(let host):
-            return "⚠️ \(host) 的主机密钥与首次连接时记录的不一致，可能遭遇中间人攻击，已拒绝连接"
+            return String(format: NSLocalizedString("⚠️ %@ 的主机密钥与首次连接时记录的不一致，可能遭遇中间人攻击，已拒绝连接", comment: ""), host)
         case .cannotSerializeHostKey:
-            return "无法读取服务器主机密钥"
+            return String(localized: "无法读取服务器主机密钥")
         case .connectionFailed(let stage, let underlying):
-            return "\(stage)失败：\(describeSSHError(underlying))"
+            return String(format: NSLocalizedString("%@失败：%@", comment: ""), stage, describeSSHError(underlying))
         case .handshakeFailed(let host, let port, let probe, let raw):
-            var lines = ["连接 \(host):\(port) 失败：SSH 算法协商不一致。"]
+            var lines = [String(format: NSLocalizedString("连接 %@:%d 失败：SSH 算法协商不一致。", comment: ""), host, port)]
             if let p = probe, !p.isEmpty {
                 lines.append("")
-                lines.append("【服务器提供】\(p.banner)")
-                lines.append("• 密钥交换：\(p.keyExchange.joined(separator: ", "))")
-                lines.append("• 主机密钥：\(p.hostKey.joined(separator: ", "))")
-                lines.append("• 加密(去)：\(p.encryptionC2S.joined(separator: ", "))")
-                lines.append("• 加密(回)：\(p.encryptionS2C.joined(separator: ", "))")
-                lines.append("• MAC(去)：\(p.macC2S.joined(separator: ", "))")
-                lines.append("• MAC(回)：\(p.macS2C.joined(separator: ", "))")
+                lines.append(String(format: NSLocalizedString("【服务器提供】%@", comment: ""), p.banner))
+                lines.append(String(format: NSLocalizedString("• 密钥交换：%@", comment: ""), p.keyExchange.joined(separator: ", ")))
+                lines.append(String(format: NSLocalizedString("• 主机密钥：%@", comment: ""), p.hostKey.joined(separator: ", ")))
+                lines.append(String(format: NSLocalizedString("• 加密(去)：%@", comment: ""), p.encryptionC2S.joined(separator: ", ")))
+                lines.append(String(format: NSLocalizedString("• 加密(回)：%@", comment: ""), p.encryptionS2C.joined(separator: ", ")))
+                lines.append(String(format: NSLocalizedString("• MAC(去)：%@", comment: ""), p.macC2S.joined(separator: ", ")))
+                lines.append(String(format: NSLocalizedString("• MAC(回)：%@", comment: ""), p.macS2C.joined(separator: ", ")))
                 lines.append("")
-                lines.append("【本 App 提供】")
-                lines.append("• 密钥交换：\(SSHKexProbe.ourKeyExchange)")
-                lines.append("• 主机密钥：\(SSHKexProbe.ourHostKey)")
-                lines.append("• 加密：\(SSHKexProbe.ourEncryption)")
-                lines.append("• MAC：\(SSHKexProbe.ourMac)")
+                lines.append(String(localized: "【本 App 提供】"))
+                lines.append(String(format: NSLocalizedString("• 密钥交换：%@", comment: ""), SSHKexProbe.ourKeyExchange))
+                lines.append(String(format: NSLocalizedString("• 主机密钥：%@", comment: ""), SSHKexProbe.ourHostKey))
+                lines.append(String(format: NSLocalizedString("• 加密：%@", comment: ""), SSHKexProbe.ourEncryption))
+                lines.append(String(format: NSLocalizedString("• MAC：%@", comment: ""), SSHKexProbe.ourMac))
             } else {
-                lines.append("（未能读取服务器算法清单，请把这条完整信息发给开发者定位）")
+                lines.append(String(localized: "（未能读取服务器算法清单，请把这条完整信息发给开发者定位）"))
             }
             lines.append("")
-            lines.append("原始错误：\(raw)")
+            lines.append(String(format: NSLocalizedString("原始错误：%@", comment: ""), raw))
             return lines.joined(separator: "\n")
         }
     }
@@ -56,21 +56,21 @@ enum SSHManagerError: LocalizedError {
 func describeSSHError(_ error: Error) -> String {
     if let e = error as? SSHManagerError {
         // 避免双重包装
-        if case .connectionFailed = e { return e.errorDescription ?? "连接失败" }
-        return e.errorDescription ?? "SSH 错误"
+        if case .connectionFailed = e { return e.errorDescription ?? String(localized: "连接失败") }
+        return e.errorDescription ?? String(localized: "SSH 错误")
     }
     if let e = error as? SSHClientError {
         switch e {
         case .allAuthenticationOptionsFailed:
-            return "身份认证失败：服务器拒绝了用户名/密码，请检查用户名和密码是否正确"
+            return String(localized: "身份认证失败：服务器拒绝了用户名/密码，请检查用户名和密码是否正确")
         case .unsupportedPasswordAuthentication:
-            return "服务器不支持密码认证"
+            return String(localized: "服务器不支持密码认证")
         case .unsupportedPrivateKeyAuthentication:
-            return "服务器不支持私钥认证"
+            return String(localized: "服务器不支持私钥认证")
         case .unsupportedHostBasedAuthentication:
-            return "服务器不支持 host-based 认证"
+            return String(localized: "服务器不支持 host-based 认证")
         case .channelCreationFailed:
-            return "SSH 通道创建失败"
+            return String(localized: "SSH 通道创建失败")
         }
     }
     if let e = error as? NIOSSHError {
@@ -81,39 +81,39 @@ func describeSSHError(_ error: Error) -> String {
         case .keyExchangeNegotiationFailure:
             // 注意：NIOSSH 在密钥交换、主机密钥、加密、MAC 任一环节无交集，
             // 或双向协商结果不对称时都抛这个错，不只是"密钥交换算法"。
-            return "SSH 握手失败：算法协商不一致（密钥交换 / 主机密钥 / 加密 / MAC 任一环节没有共同选项）（\(raw)）"
+            return String(format: NSLocalizedString("SSH 握手失败：算法协商不一致（密钥交换 / 主机密钥 / 加密 / MAC 任一环节没有共同选项）（%@）", comment: ""), raw)
         case .unsupportedVersion:
-            return "SSH 握手失败：服务器的 SSH 版本不受支持（\(raw)）"
+            return String(format: NSLocalizedString("SSH 握手失败：服务器的 SSH 版本不受支持（%@）", comment: ""), raw)
         case .invalidExchangeHashSignature:
-            return "SSH 握手失败：服务器主机密钥签名校验未通过（\(raw)）"
+            return String(format: NSLocalizedString("SSH 握手失败：服务器主机密钥签名校验未通过（%@）", comment: ""), raw)
         case .invalidHostKeyForKeyExchange:
-            return "SSH 握手失败：服务器发送的主机密钥与协商的不一致（\(raw)）"
+            return String(format: NSLocalizedString("SSH 握手失败：服务器发送的主机密钥与协商的不一致（%@）", comment: ""), raw)
         case .tcpShutdown:
-            return "连接被中断：TCP 在 SSH 会话结束前关闭（\(raw)）"
+            return String(format: NSLocalizedString("连接被中断：TCP 在 SSH 会话结束前关闭（%@）", comment: ""), raw)
         case .creatingChannelAfterClosure:
-            return "SSH 连接已关闭，无法再打开通道，请重试（\(raw)）"
+            return String(format: NSLocalizedString("SSH 连接已关闭，无法再打开通道，请重试（%@）", comment: ""), raw)
         case .channelSetupRejected:
-            return "服务器拒绝了通道请求（\(raw)）"
+            return String(format: NSLocalizedString("服务器拒绝了通道请求（%@）", comment: ""), raw)
         case .protocolViolation:
-            return "SSH 协议异常（\(raw)）"
+            return String(format: NSLocalizedString("SSH 协议异常（%@）", comment: ""), raw)
         case .invalidPacketFormat, .invalidSSHMessage, .unknownPacketType:
-            return "收到无法解析的 SSH 数据包（\(raw)）"
+            return String(format: NSLocalizedString("收到无法解析的 SSH 数据包（%@）", comment: ""), raw)
         default:
-            return "SSH 协议错误（\(raw)）"
+            return String(format: NSLocalizedString("SSH 协议错误（%@）", comment: ""), raw)
         }
     }
     if let e = error as? SFTPError {
         switch e {
         case .missingResponse:
-            return "SFTP 无响应：15 秒内没有收到服务器回复，可能是打开的 SFTP 句柄太多"
+            return String(localized: "SFTP 无响应：15 秒内没有收到服务器回复，可能是打开的 SFTP 句柄太多")
         case .connectionClosed:
-            return "SFTP 连接已关闭"
+            return String(localized: "SFTP 连接已关闭")
         case .errorStatus(let status):
-            return "SFTP 操作被服务器拒绝（\(status)）"
+            return String(format: NSLocalizedString("SFTP 操作被服务器拒绝（%@）", comment: ""), String(describing: status))
         case .unsupportedVersion(let v):
-            return "SFTP 版本不受支持（\(v)）"
+            return String(format: NSLocalizedString("SFTP 版本不受支持（%@）", comment: ""), String(describing: v))
         default:
-            return "SFTP 错误（\(String(describing: e))）"
+            return String(format: NSLocalizedString("SFTP 错误（%@）", comment: ""), String(describing: e))
         }
     }
     return error.localizedDescription
@@ -292,7 +292,7 @@ actor SSHManager {
                 )
             }
             throw SSHManagerError.connectionFailed(
-                stage: "连接 \(server.host):\(server.port)",
+                stage: String(format: NSLocalizedString("连接 %@:%d", comment: ""), server.host, server.port),
                 underlying: error
             )
         }
@@ -324,7 +324,7 @@ actor SSHManager {
         } catch let e as SSHManagerError {
             throw e
         } catch {
-            throw SSHManagerError.connectionFailed(stage: "读取目录 \(path)", underlying: error)
+            throw SSHManagerError.connectionFailed(stage: String(format: NSLocalizedString("读取目录 %@", comment: ""), path), underlying: error)
         }
     }
 
@@ -364,7 +364,7 @@ actor SSHManager {
         } catch let e as SSHManagerError {
             throw e
         } catch {
-            throw SSHManagerError.connectionFailed(stage: "读取文件 \(path)", underlying: error)
+            throw SSHManagerError.connectionFailed(stage: String(format: NSLocalizedString("读取文件 %@", comment: ""), path), underlying: error)
         }
     }
 
@@ -380,7 +380,7 @@ actor SSHManager {
         } catch let e as SSHManagerError {
             throw e
         } catch {
-            throw SSHManagerError.connectionFailed(stage: "保存文件 \(path)", underlying: error)
+            throw SSHManagerError.connectionFailed(stage: String(format: NSLocalizedString("保存文件 %@", comment: ""), path), underlying: error)
         }
     }
 
@@ -397,7 +397,7 @@ actor SSHManager {
         } catch let e as SSHManagerError {
             throw e
         } catch {
-            throw SSHManagerError.connectionFailed(stage: "执行命令", underlying: error)
+            throw SSHManagerError.connectionFailed(stage: String(localized: "执行命令"), underlying: error)
         }
     }
 

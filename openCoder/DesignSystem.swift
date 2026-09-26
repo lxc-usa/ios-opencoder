@@ -148,9 +148,9 @@ struct DSGroupCard<Content: View>: View {
 @MainActor
 struct EmptyState: View {
     let icon: String
-    let title: String
-    var message: String? = nil
-    var actionTitle: String? = nil
+    let title: LocalizedStringKey
+    var message: LocalizedStringKey? = nil
+    var actionTitle: LocalizedStringKey? = nil
     var action: (() -> Void)? = nil
 
     var body: some View {

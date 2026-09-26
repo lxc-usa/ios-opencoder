@@ -30,7 +30,7 @@ struct SFTPBrowserView: View {
                 EmptyState(
                     icon: "wifi.exclamationmark",
                     title: "连接失败",
-                    message: errorMessage,
+                    message: "\(errorMessage)",
                     actionTitle: "重试",
                     action: load
                 )
@@ -80,7 +80,7 @@ struct SFTPBrowserView: View {
             if let name = openingFileName {
                 VStack(spacing: 12) {
                     ProgressView()
-                    Text("正在打开 \(name)…")
+                    Text(String(format: NSLocalizedString("正在打开 %@…", comment: ""), name))
                         .font(.caption)
                 }
                 .padding(24)
@@ -93,7 +93,7 @@ struct SFTPBrowserView: View {
     }
 
     private var navigationTitle: String {
-        if path == "." || path == "/" { return server?.name ?? "远程目录" }
+        if path == "." || path == "/" { return server?.name ?? String(localized: "远程目录") }
         return (path as NSString).lastPathComponent
     }
 
@@ -105,7 +105,7 @@ struct SFTPBrowserView: View {
 
     private func load() {
         guard let server else {
-            errorMessage = "服务器不存在"
+            errorMessage = String(localized: "服务器不存在")
             isLoading = false
             return
         }

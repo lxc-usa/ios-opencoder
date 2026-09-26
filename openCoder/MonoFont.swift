@@ -26,10 +26,10 @@ enum MonoFont: String, CaseIterable, Identifiable {
 
     var note: String {
         switch self {
-        case .sfMono: return "Apple 现代等宽字体"
-        case .menlo: return "macOS 终端经典字体"
-        case .courierNew: return "Windows 终端经典字体"
-        case .courier: return "打字机风格"
+        case .sfMono: return String(localized: "Apple 现代等宽字体")
+        case .menlo: return String(localized: "macOS 终端经典字体")
+        case .courierNew: return String(localized: "Windows 终端经典字体")
+        case .courier: return String(localized: "打字机风格")
         }
     }
 

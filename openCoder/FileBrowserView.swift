@@ -185,9 +185,9 @@ struct FileBrowserView: View {
         if documents.trashFile(url) {
             documents.closeDocuments(at: url)
             reload()
-            ToastCenter.shared.show("已从列表移除，文件保留在设备中")
+            ToastCenter.shared.show(String(localized: "已从列表移除，文件保留在设备中"))
         } else {
-            fail("移出列表失败")
+            fail(String(localized: "移出列表失败"))
         }
     }
 
@@ -205,9 +205,9 @@ struct FileBrowserView: View {
         }
         reload()
         if count > 0 {
-            ToastCenter.shared.show("已导入 \(count) 个文件")
+            ToastCenter.shared.show(String(format: NSLocalizedString("已导入 %d 个文件", comment: ""), count))
         } else if !urls.isEmpty {
-            fail("导入失败：文件已存在或无法读取")
+            fail(String(localized: "导入失败：文件已存在或无法读取"))
         }
     }
 }

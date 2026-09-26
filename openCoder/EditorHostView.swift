@@ -45,7 +45,7 @@ struct EditorHostView: View {
             }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("「\(pendingClose?.title ?? "")」有未保存的更改，要怎么处理？")
+            Text(String(format: NSLocalizedString("「%@」有未保存的更改，要怎么处理？", comment: ""), pendingClose?.title ?? ""))
         }
         .alert("保存失败", isPresented: $showSaveError) {
             Button("好", role: .cancel) {}
@@ -119,7 +119,7 @@ private struct DocumentContentView: View {
             EmptyState(
                 icon: "exclamationmark.triangle",
                 title: "打开失败",
-                message: error,
+                message: "\(error)",
                 actionTitle: "关闭",
                 action: { documents.close(doc) }
             )
@@ -244,7 +244,7 @@ private struct DocEditorView: View {
         Task {
             do {
                 try await documents.save(doc)
-                ToastCenter.shared.show("已保存")
+                ToastCenter.shared.show(String(localized: "已保存"))
             } catch {
                 onSaveError(error.localizedDescription)
             }
