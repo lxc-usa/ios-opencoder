@@ -20,7 +20,7 @@ final class DocumentManager: ObservableObject {
 
     init(servers: ServerStore) {
         self.servers = servers
-        loadHiddenLocalFiles()
+        migrateHiddenFilesToTrash()
     }
 
     var selected: OpenDocument? {
@@ -137,47 +137,58 @@ final class DocumentManager: ObservableObject {
         doomed.forEach(close)
     }
 
-    // MARK: - 列表隐藏（只从文件列表移除记录，文件本身保留在磁盘上）
+    // MARK: - 移出列表（只从文件列表移除记录，文件本身保留在设备上）
 
-    /// 被用户从文件列表移除的本地路径（相对 Documents 根目录），持久化保存。
+    /// "移出列表"的真实去向：Documents 下的隐藏目录。
+    /// 点开头目录会被文件列表（.skipsHiddenFiles）与系统导入选择器自动隐藏，
+    /// 因此被移出的文件不会再出现在导入清单里，也不可能"复活"。
     /// iOS 没有废纸篓，FileManager.trashItem 不可用；按用户要求，
     /// 文件列表的"删除"只删记录、不删文件。
-    private(set) var hiddenLocalPaths: Set<String> = [] {
-        didSet {
-            UserDefaults.standard.set(Array(hiddenLocalPaths), forKey: "opencoder.hiddenLocalFiles")
+    static var trashDirectory: URL {
+        documentsDirectory.appendingPathComponent(".opencoder_trash", isDirectory: true)
+    }
+
+    /// 把文件/文件夹搬进回收站（重名时自动加序号），成功返回 true。
+    func trashFile(_ url: URL) -> Bool {
+        // 别把回收站自己搬进去
+        guard url.standardized.path != Self.trashDirectory.standardized.path else { return false }
+        do {
+            try FileManager.default.createDirectory(at: Self.trashDirectory, withIntermediateDirectories: true)
+            let dest = uniqueTrashURL(for: url.lastPathComponent)
+            try FileManager.default.moveItem(at: url, to: dest)
+            return true
+        } catch {
+            return false
         }
     }
 
-    /// 相对 Documents 根目录的路径（稳定标识，不随当前浏览目录变化）。
-    /// 统一做 NFC 规范化，避免"同名不同 Unicode 写法"产生幽灵副本。
-    private func relativeLocalPath(_ url: URL) -> String? {
-        let root = Self.documentsDirectory.standardized.path
-        let p = url.standardized.path
-        guard p == root || p.hasPrefix(root + "/") else { return nil }
-        let rel = p == root ? "." : String(p.dropFirst(root.count + 1))
-        return rel.precomposedStringWithCanonicalMapping
+    private func uniqueTrashURL(for name: String) -> URL {
+        let trash = Self.trashDirectory
+        var dest = trash.appendingPathComponent(name)
+        var i = 1
+        while FileManager.default.fileExists(atPath: dest.path) {
+            i += 1
+            let base = (name as NSString).deletingPathExtension
+            let ext = (name as NSString).pathExtension
+            let newName = ext.isEmpty ? "\(base) (\(i))" : "\(base) (\(i)).\(ext)"
+            dest = trash.appendingPathComponent(newName)
+        }
+        return dest
     }
 
-    /// 该 URL 是否已被用户从列表移除。
-    func isHiddenLocalFile(_ url: URL) -> Bool {
-        guard let rel = relativeLocalPath(url) else { return false }
-        return hiddenLocalPaths.contains(rel)
-    }
-
-    /// 从文件列表移除（文件保留在磁盘上）。
-    func hideLocalFile(_ url: URL) {
-        guard let rel = relativeLocalPath(url) else { return }
-        hiddenLocalPaths.insert(rel)
-    }
-
-    /// 同名文件重新出现（导入/新建/重命名）时取消隐藏，保证新文件可见。
-    func unhideLocalFile(_ url: URL) {
-        guard let rel = relativeLocalPath(url) else { return }
-        hiddenLocalPaths.remove(rel)
-    }
-
-    private func loadHiddenLocalFiles() {
-        let saved = UserDefaults.standard.stringArray(forKey: "opencoder.hiddenLocalFiles") ?? []
-        hiddenLocalPaths = Set(saved.map { $0.precomposedStringWithCanonicalMapping })
+    /// 旧版（v13.x）用 UserDefaults 存隐藏文件名集合；v14 起改用回收站目录。
+    /// 启动时把旧记录对应的文件搬进回收站，然后清掉旧 key，保证行为一致。
+    private func migrateHiddenFilesToTrash() {
+        let key = "opencoder.hiddenLocalFiles"
+        guard let saved = UserDefaults.standard.stringArray(forKey: key), !saved.isEmpty else { return }
+        let trashPath = Self.trashDirectory.standardized.path
+        for rel in saved {
+            let src = Self.documentsDirectory.appendingPathComponent(rel)
+            let srcPath = src.standardized.path
+            guard srcPath != trashPath, !srcPath.hasPrefix(trashPath + "/"),
+                  FileManager.default.fileExists(atPath: srcPath) else { continue }
+            _ = trashFile(src)
+        }
+        UserDefaults.standard.removeObject(forKey: key)
     }
 }

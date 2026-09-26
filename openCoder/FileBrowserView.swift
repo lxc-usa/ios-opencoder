@@ -16,9 +16,6 @@ struct FileBrowserView: View {
     @State private var renameTarget: URL?
     @State private var errorMessage: String?
     @State private var showError = false
-    /// 诊断用：当前被隐藏的记录数（v13.3）。若文件"复活"但这里仍大于 0，
-    /// 说明是过滤失效；若这里归零，说明隐藏记录被清空了。
-    @State private var hiddenCount = 0
 
     var body: some View {
         Group {
@@ -48,11 +45,6 @@ struct FileBrowserView: View {
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button("移出列表", role: .destructive) { delete(url) }
                         }
-                    }
-                    if hiddenCount > 0 {
-                        Text("已从列表隐藏 \(hiddenCount) 个文件，文件保留在设备中")
-                            .font(.footnote)
-                            .foregroundColor(.secondary)
                     }
                 }
             }
@@ -124,13 +116,13 @@ struct FileBrowserView: View {
             includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles]
         )) ?? []
-        // 用户从列表移除的记录不再显示，文件本身仍在磁盘上。
-        items = urls.filter { !documents.isHiddenLocalFile($0) }.sorted {
+        // 回收站是点开头目录，已被 .skipsHiddenFiles 跳过；这里再显式排除一次兜底。
+        let trashPath = DocumentManager.trashDirectory.standardized.path
+        items = urls.filter { $0.standardized.path != trashPath }.sorted {
             let d0 = isDirectory($0), d1 = isDirectory($1)
             if d0 != d1 { return d0 }
             return $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending
         }
-        hiddenCount = documents.hiddenLocalPaths.count
     }
 
     private func open(_ url: URL) {
@@ -153,7 +145,6 @@ struct FileBrowserView: View {
         let url = directory.appendingPathComponent(name)
         do {
             try "".write(to: url, atomically: true, encoding: .utf8)
-            documents.unhideLocalFile(url)
             reload()
             documents.openLocalFile(url: url)
             path.append(.editor)
@@ -168,7 +159,6 @@ struct FileBrowserView: View {
         let url = directory.appendingPathComponent(name)
         do {
             try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
-            documents.unhideLocalFile(url)
             reload()
         } catch {
             fail(error.localizedDescription)
@@ -182,35 +172,33 @@ struct FileBrowserView: View {
         let dest = target.deletingLastPathComponent().appendingPathComponent(name)
         do {
             try FileManager.default.moveItem(at: target, to: dest)
-            documents.unhideLocalFile(dest)
             reload()
         } catch {
             fail(error.localizedDescription)
         }
     }
 
-    /// 从列表移除：只删记录，文件保留在磁盘上。
+    /// 从列表移除：把文件搬进隐藏回收站，文件本身保留在设备上。
     /// 注意 iOS 没有废纸篓，FileManager.trashItem 会直接抛"功能不受支持"，
     /// 此前报错的根因即在此。
     private func delete(_ url: URL) {
-        documents.hideLocalFile(url)
-        documents.closeDocuments(at: url)
-        reload()
-        ToastCenter.shared.show("已从列表移除，文件保留在设备中")
+        if documents.trashFile(url) {
+            documents.closeDocuments(at: url)
+            reload()
+            ToastCenter.shared.show("已从列表移除，文件保留在设备中")
+        } else {
+            fail("移出列表失败")
+        }
     }
 
     private func importFiles(_ urls: [URL]) {
         var count = 0
-        var skippedHidden = 0
         for url in urls {
             guard url.startAccessingSecurityScopedResource() else { continue }
             defer { url.stopAccessingSecurityScopedResource() }
             let dest = directory.appendingPathComponent(url.lastPathComponent)
-            // 曾被移出列表的文件名：跳过导入，保持隐藏，不"复活"记录
-            if documents.isHiddenLocalFile(dest) {
-                skippedHidden += 1
-                continue
-            }
+            // 被移出列表的文件已搬进隐藏回收站，不在 Documents 下；
+            // 这里导入同名文件就是全新文件，不存在"复活"一说。
             if (try? FileManager.default.copyItem(at: url, to: dest)) != nil {
                 count += 1
             }
@@ -218,11 +206,8 @@ struct FileBrowserView: View {
         reload()
         if count > 0 {
             ToastCenter.shared.show("已导入 \(count) 个文件")
-        } else if !urls.isEmpty && skippedHidden == 0 {
+        } else if !urls.isEmpty {
             fail("导入失败：文件已存在或无法读取")
-        }
-        if skippedHidden > 0 {
-            ToastCenter.shared.show("已跳过 \(skippedHidden) 个曾移出列表的文件")
         }
     }
 }
