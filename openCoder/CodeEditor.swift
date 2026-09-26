@@ -66,10 +66,11 @@ struct CodeEditor: UIViewRepresentable {
         }
         // 标签页切换时 TextView 会被复用，语言必须跟着当前文件走，
         // 否则先开 txt 再切回 swift 会导致 swift 没有高亮。
+        // Runestone 0.5.2 没有 textView.language，直接走 setLanguageMode。
         let coordinator = context.coordinator
         if coordinator.lastFileExtension != fileExtension {
             coordinator.lastFileExtension = fileExtension
-            textView.language = language
+            textView.setLanguageMode(TreeSitterLanguageMode(language: language))
         }
         if textView.showLineNumbers != showLineNumbers {
             textView.showLineNumbers = showLineNumbers
