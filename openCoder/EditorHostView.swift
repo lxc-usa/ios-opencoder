@@ -17,7 +17,16 @@ struct EditorHostView: View {
             tabStrip
             Divider()
             if let doc = documents.selected {
-                editorArea(for: doc)
+                DocumentContentView(
+                    doc: doc,
+                    documents: documents,
+                    settings: settings,
+                    findTrigger: findTrigger,
+                    onSaveError: { message in
+                        saveError = message
+                        showSaveError = true
+                    }
+                )
             } else {
                 EmptyState(
                     icon: "doc.text",
@@ -66,8 +75,19 @@ struct EditorHostView: View {
 
     // MARK: - 编辑区
 
-    @ViewBuilder
-    private func editorArea(for doc: OpenDocument) -> some View {
+/// 文档内容区：独立观察单个文档。
+/// 根因说明：之前这里直接用 `editorArea(for: doc)`，doc 只是普通参数，
+/// EditorHostView 只观察 DocumentManager；doc.isLoading 从 true 变 false 时
+/// documents 数组本身没变，SwiftUI 不会重算该区域，界面永久卡在"加载中…"。
+/// 现在由独立视图持有 @ObservedObject，状态变化即刷新。
+private struct DocumentContentView: View {
+    @ObservedObject var doc: OpenDocument
+    @ObservedObject var documents: DocumentManager
+    @ObservedObject var settings: SettingsStore
+    @ObservedObject var findTrigger: FindTrigger
+    var onSaveError: (String) -> Void
+
+    var body: some View {
         if doc.isLoading {
             ProgressView("加载中…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -85,13 +105,11 @@ struct EditorHostView: View {
                 documents: documents,
                 settings: settings,
                 findTrigger: findTrigger,
-                onSaveError: { message in
-                    saveError = message
-                    showSaveError = true
-                }
+                onSaveError: onSaveError
             )
         }
     }
+}
 
     // MARK: - 关闭
 

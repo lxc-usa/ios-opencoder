@@ -41,9 +41,15 @@ final class ServerStore: ObservableObject {
 
     func update(_ server: ServerConfig, password: String?) {
         guard let index = servers.firstIndex(where: { $0.id == server.id }) else { return }
+        let old = servers[index]
         servers[index] = server
         if let password {
             KeychainStore.save(password, account: KeychainStore.passwordAccount(for: server.id))
+        }
+        // 主机或端口变了：旧 pin 作废、断开旧连接，下次连接重新 TOFU
+        if old.host != server.host || old.port != server.port {
+            HostKeyPinStore.shared.forget(key: HostKeyPinStore.pinKey(host: old.host, port: old.port))
+            Task { await SSHManager.shared.disconnect(serverID: server.id) }
         }
         persist()
     }
@@ -51,6 +57,8 @@ final class ServerStore: ObservableObject {
     func delete(_ server: ServerConfig) {
         servers.removeAll { $0.id == server.id }
         KeychainStore.delete(account: KeychainStore.passwordAccount(for: server.id))
+        HostKeyPinStore.shared.forget(key: HostKeyPinStore.pinKey(host: server.host, port: server.port))
+        Task { await SSHManager.shared.disconnect(serverID: server.id) }
         persist()
     }
 

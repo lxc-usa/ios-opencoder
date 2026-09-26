@@ -21,6 +21,23 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
+      - name: Verify Info.plist survived XcodeGen
+        run: |
+          set -euo pipefail
+          # XcodeGen 会覆盖 info.path 指向的源文件：成品必须带 UILaunchScreen，
+          # 否则真机会进入旧比例兼容模式（上下黑边）。这里直接断言源文件。
+          python3 - <<'EOF'
+          import plistlib, sys
+          with open('openCoder/Info.plist', 'rb') as f:
+              info = plistlib.load(f)
+          missing = [k for k in ('UILaunchScreen', 'CFBundleDisplayName',
+                                 'UISupportedInterfaceOrientations') if k not in info]
+          if missing:
+              print(f'Info.plist 缺少键: {missing}')
+              sys.exit(1)
+          print('Info.plist OK:', sorted(info.keys()))
+          EOF
+
       - name: Resolve Swift packages
         run: |
           xcodebuild -resolvePackageDependencies \
@@ -44,9 +61,20 @@ jobs:
           APP_PATH="$(find build/DerivedData/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -n 1)"
           echo "App: $APP_PATH"
           test -n "$APP_PATH"
+          # 断言成品 Info.plist：没有 UILaunchScreen 真机会黑边
+          python3 - "$APP_PATH" <<'EOF'
+          import plistlib, sys
+          with open(f'{sys.argv[1]}/Info.plist', 'rb') as f:
+              info = plistlib.load(f)
+          if 'UILaunchScreen' not in info:
+              print('成品 Info.plist 缺少 UILaunchScreen')
+              sys.exit(1)
+          print('成品 Info.plist OK, UILaunchScreen =', info['UILaunchScreen'])
+          EOF
           rm -rf Payload openCoder-unsigned.ipa
           mkdir -p Payload
           cp -R "$APP_PATH" Payload/
+          zip -qry openCoder-unsigned.ipa Payload
           zip -qry openCoder-unsigned.ipa Payload
 
       - name: Upload unsigned IPA

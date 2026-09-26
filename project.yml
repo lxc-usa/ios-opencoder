@@ -35,6 +35,26 @@ targets:
       - path: openCoder
     info:
       path: openCoder/Info.plist
+      # 注意：XcodeGen 每次 generate 都会用「默认键 + 这里声明的 properties」
+      # 整体覆盖 path 指向的源文件。凡是 App 需要的键必须在这里声明，
+      # 只写在源 Info.plist 里会被洗掉（已因此导致过真机界面黑边问题）。
+      properties:
+        CFBundleDisplayName: openCoder
+        UILaunchScreen: {}
+        LSRequiresIPhoneOS: true
+        UIUserInterfaceStyle: Automatic
+        UIRequiredDeviceCapabilities:
+          - arm64
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+          - UIInterfaceOrientationPortraitUpsideDown
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
     dependencies:
       - package: Runestone
         product: Runestone
