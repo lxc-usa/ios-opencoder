@@ -9,6 +9,8 @@ enum SSHManagerError: LocalizedError {
     case cannotSerializeHostKey
     /// 带阶段上下文的连接/操作错误：underlying 的原始信息通过 describeSSHError 转成中文。
     case connectionFailed(stage: String, underlying: Error)
+    /// 握手算法协商失败：已自动抓取服务器 KEXINIT，把双方算法清单摆出来，不再靠猜。
+    case handshakeFailed(host: String, port: Int, probe: SSHKexProbe.Result?, raw: String)
 
     var errorDescription: String? {
         switch self {
@@ -20,6 +22,29 @@ enum SSHManagerError: LocalizedError {
             return "无法读取服务器主机密钥"
         case .connectionFailed(let stage, let underlying):
             return "\(stage)失败：\(describeSSHError(underlying))"
+        case .handshakeFailed(let host, let port, let probe, let raw):
+            var lines = ["连接 \(host):\(port) 失败：SSH 算法协商不一致。"]
+            if let p = probe, !p.isEmpty {
+                lines.append("")
+                lines.append("【服务器提供】\(p.banner)")
+                lines.append("• 密钥交换：\(p.keyExchange.joined(separator: ", "))")
+                lines.append("• 主机密钥：\(p.hostKey.joined(separator: ", "))")
+                lines.append("• 加密(去)：\(p.encryptionC2S.joined(separator: ", "))")
+                lines.append("• 加密(回)：\(p.encryptionS2C.joined(separator: ", "))")
+                lines.append("• MAC(去)：\(p.macC2S.joined(separator: ", "))")
+                lines.append("• MAC(回)：\(p.macS2C.joined(separator: ", "))")
+                lines.append("")
+                lines.append("【本 App 提供】")
+                lines.append("• 密钥交换：\(SSHKexProbe.ourKeyExchange)")
+                lines.append("• 主机密钥：\(SSHKexProbe.ourHostKey)")
+                lines.append("• 加密：\(SSHKexProbe.ourEncryption)")
+                lines.append("• MAC：\(SSHKexProbe.ourMac)")
+            } else {
+                lines.append("（未能读取服务器算法清单，请把这条完整信息发给开发者定位）")
+            }
+            lines.append("")
+            lines.append("原始错误：\(raw)")
+            return lines.joined(separator: "\n")
         }
     }
 }
@@ -54,7 +79,9 @@ func describeSSHError(_ error: Error) -> String {
         let raw = String(describing: e)
         switch t {
         case .keyExchangeNegotiationFailure:
-            return "SSH 握手失败：客户端与服务器没有共同的密钥交换算法或主机密钥算法（\(raw)）"
+            // 注意：NIOSSH 在密钥交换、主机密钥、加密、MAC 任一环节无交集，
+            // 或双向协商结果不对称时都抛这个错，不只是"密钥交换算法"。
+            return "SSH 握手失败：算法协商不一致（密钥交换 / 主机密钥 / 加密 / MAC 任一环节没有共同选项）（\(raw)）"
         case .unsupportedVersion:
             return "SSH 握手失败：服务器的 SSH 版本不受支持（\(raw)）"
         case .invalidExchangeHashSignature:
@@ -90,6 +117,14 @@ func describeSSHError(_ error: Error) -> String {
         }
     }
     return error.localizedDescription
+}
+
+/// 是否为算法协商失败。
+/// NIOSSHError 的 diagnostics 是私有的，只能比对公开的 `type`；再加字符串兜底，
+/// 防止 Citadel 在外层包了一层别的 Error 类型。
+func isKeyExchangeNegotiationFailure(_ error: Error) -> Bool {
+    if let e = error as? NIOSSHError, e.type == .keyExchangeNegotiationFailure { return true }
+    return String(describing: error).contains("keyExchangeNegotiationFailure")
 }
 
 /// 主机密钥 TOFU 存储：pinKey（"host:port"）-> 主机密钥字节的 base64。单例，线程安全。
@@ -189,14 +224,34 @@ actor SSHManager {
             hostKeyValidator: .custom(TOFUHostKeyValidator(host: server.host, port: server.port))
         )
         // Citadel 推荐的兼容算法集：NIOSSH 默认不支持 ssh-rsa 主机密钥，
-        // 这里补上 RSA 主机密钥、DH group14 密钥交换和 AES128CTR，
-        // 否则部分服务器会在握手阶段直接失败（NIOSSHError.keyExchangeNegotiationFailure）。
-        settings.algorithms = .all
+        // 这里补上 RSA 主机密钥、DH group14 密钥交换和 AES128CTR。
+        //
+        // 注意：依赖的 swift-nio-ssh fork 默认只带 AES-GCM 加密套件；
+        // 实测某些服务器既不提供 GCM 也不提供 aes128-ctr，这里再补上
+        // aes256-ctr / aes192-ctr（本 App 内实现，见 AESCTRCiphers.swift），
+        // 否则握手会报 NIOSSHError.keyExchangeNegotiationFailure。
+        var sshAlgorithms = SSHAlgorithms.all
+        sshAlgorithms.transportProtectionSchemes = .add([
+            AES256CTRTransportProtection.self,
+            AES192CTRTransportProtection.self,
+            AES128CTR.self,
+        ])
+        settings.algorithms = sshAlgorithms
         do {
             let client = try await SSHClient.connect(to: settings)
             clients[server.id] = client
             return client
         } catch {
+            if isKeyExchangeNegotiationFailure(error) {
+                // 算法协商失败：自动抓服务器 KEXINIT，把双方清单摆出来，不再靠猜。
+                let probe = await SSHKexProbe.probe(host: server.host, port: server.port)
+                throw SSHManagerError.handshakeFailed(
+                    host: server.host,
+                    port: server.port,
+                    probe: probe,
+                    raw: String(describing: error)
+                )
+            }
             throw SSHManagerError.connectionFailed(
                 stage: "连接 \(server.host):\(server.port)",
                 underlying: error
