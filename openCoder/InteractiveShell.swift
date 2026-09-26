@@ -81,10 +81,11 @@ final class InteractiveShell: ObservableObject {
         // pty 的输入有内核缓冲，shell 尚未打印首个提示符也不丢字节。
         Task { [weak self] in
             for await _ in readyStream {
+                guard let self else { break }
                 if let initialPath, !initialPath.isEmpty {
-                    self?.send(Array("cd -- \(shellEscape(initialPath))\n".utf8))
+                    self.send(Array("cd -- \(self.shellEscape(initialPath))\n".utf8))
                 }
-                self?.state = .connected
+                self.state = .connected
                 break
             }
         }
@@ -223,5 +224,4 @@ final class TerminalSessionCache {
         sessions[serverID]?.stop()
         sessions.removeValue(forKey: serverID)
     }
-}
 }
