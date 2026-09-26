@@ -69,7 +69,7 @@ struct EditorHostView: View {
                 }
             }
             .padding(.horizontal, 8)
-            .padding(.vertical, 6)
+            .padding(.vertical, 4)
         }
         .background(Color(.systemGroupedBackground))
     }

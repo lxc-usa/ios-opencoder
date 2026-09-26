@@ -23,6 +23,49 @@ struct SettingsView: View {
                         }
                     }
 
+                    DSGroupCard(title: "终端") {
+                        NavigationLink {
+                            TerminalFontPickerView(settings: settings)
+                        } label: {
+                            SettingRow(icon: "textformat", iconTint: .purple, title: "字体") {
+                                HStack(spacing: 6) {
+                                    Text(settings.terminalFont.displayName)
+                                        .font(DSFonts.base)
+                                        .foregroundColor(DSColors.muted)
+                                    Image(systemName: "chevron.right")
+                                        .font(DSFonts.smBold)
+                                        .foregroundColor(DSColors.muted)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        SettingDivider()
+                        SettingRow(icon: "textformat.size", iconTint: .purple, title: "字号") {
+                            HStack(spacing: 8) {
+                                Text("\(Int(settings.terminalFontSize)) pt")
+                                    .font(DSFonts.base)
+                                    .foregroundColor(DSColors.muted)
+                                    .monospacedDigit()
+                                Stepper("", value: $settings.terminalFontSize, in: 10...20, step: 1)
+                                    .labelsHidden()
+                            }
+                        }
+                        SettingDivider()
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("预览")
+                                .font(DSFonts.sm)
+                                .foregroundColor(DSColors.muted)
+                            Text("$ ls -la\ntotal 48\ndrwxr-xr-x 12 root root 4096 09-26 13:55 .")
+                                .font(settings.terminalFont.font(size: settings.terminalFontSize))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(10)
+                                .background(Color(.systemBackground))
+                                .cornerRadius(DSSpace.radiusSM)
+                        }
+                        .padding(.horizontal, DSSpace.base)
+                        .padding(.vertical, 10)
+                    }
+
                     DSGroupCard(title: "连接") {
                         Button(role: .destructive) {
                             showDisconnectConfirm = true
@@ -74,5 +117,44 @@ struct SettingsView: View {
                 Button("取消", role: .cancel) {}
             }
         }
+    }
+}
+
+/// 终端字体选择：每行带实时预览，点选即生效。
+@MainActor
+struct TerminalFontPickerView: View {
+    @ObservedObject var settings: SettingsStore
+
+    var body: some View {
+        List(TerminalFont.allCases) { font in
+            Button {
+                settings.terminalFont = font
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(font.displayName)
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                        Text(font.note)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text("Ag 0123456789 $ ls -la ~/")
+                            .font(font.font(size: 15))
+                            .foregroundColor(.primary)
+                            .padding(.top, 2)
+                    }
+                    Spacer()
+                    if settings.terminalFont == font {
+                        Image(systemName: "checkmark")
+                            .font(.headline)
+                            .foregroundColor(.accentColor)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+            .buttonStyle(.plain)
+        }
+        .navigationTitle("终端字体")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

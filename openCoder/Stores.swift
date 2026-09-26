@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-/// App 设置：自动换行、行号显示。
+/// App 设置：自动换行、行号显示、终端字体与字号。
 @MainActor
 final class SettingsStore: ObservableObject {
     @Published var wordWrap: Bool {
@@ -10,11 +10,20 @@ final class SettingsStore: ObservableObject {
     @Published var showLineNumbers: Bool {
         didSet { UserDefaults.standard.set(showLineNumbers, forKey: "opencoder.showLineNumbers") }
     }
+    @Published var terminalFont: TerminalFont {
+        didSet { UserDefaults.standard.set(terminalFont.rawValue, forKey: "opencoder.terminalFont") }
+    }
+    @Published var terminalFontSize: Double {
+        didSet { UserDefaults.standard.set(terminalFontSize, forKey: "opencoder.terminalFontSize") }
+    }
 
     init() {
         let defaults = UserDefaults.standard
         self.wordWrap = defaults.object(forKey: "opencoder.wordWrap") as? Bool ?? true
         self.showLineNumbers = defaults.object(forKey: "opencoder.showLineNumbers") as? Bool ?? true
+        self.terminalFont = TerminalFont(rawValue: defaults.string(forKey: "opencoder.terminalFont") ?? "") ?? .sfMono
+        let savedSize = defaults.object(forKey: "opencoder.terminalFontSize") as? Double ?? 13
+        self.terminalFontSize = min(max(savedSize, 10), 20)
     }
 }
 

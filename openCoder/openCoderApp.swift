@@ -96,7 +96,7 @@ struct ServersTabView: View {
                     case .browser(let serverID, let dirPath):
                         SFTPBrowserView(serverID: serverID, path: dirPath, servers: servers, documents: documents, navPath: $path)
                     case .terminal(let serverID):
-                        TerminalView(serverID: serverID, servers: servers)
+                        TerminalView(serverID: serverID, servers: servers, settings: settings)
                     case .editor:
                         EditorHostView(documents: documents, settings: settings)
                     }

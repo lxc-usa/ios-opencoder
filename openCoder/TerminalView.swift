@@ -6,16 +6,22 @@ import SwiftUI
 struct TerminalView: View {
     let serverID: UUID
     @ObservedObject var servers: ServerStore
+    @ObservedObject var settings: SettingsStore
 
     @State private var command = ""
     @State private var lines: [TerminalLine] = []
     @State private var isRunning = false
+    @State private var showInfo = false
+
+    private var outputFont: Font {
+        settings.terminalFont.font(size: settings.terminalFontSize)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 8) {
+                    LazyVStack(alignment: .leading, spacing: 3) {
                         if lines.isEmpty {
                             Text("输入下方命令并运行，如：ls -la")
                                 .font(.caption)
@@ -24,14 +30,15 @@ struct TerminalView: View {
                         }
                         ForEach(lines) { line in
                             Text(line.text)
-                                .font(.system(.footnote, design: .monospaced))
+                                .font(outputFont)
                                 .foregroundColor(line.isError ? .red : (line.isCommand ? .accentColor : .primary))
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .id(line.id)
                         }
                     }
-                    .padding()
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
                 }
                 .onChange(of: lines.count) { _, _ in
                     if let last = lines.last {
@@ -42,30 +49,48 @@ struct TerminalView: View {
                 }
             }
             Divider()
-            VStack(spacing: 8) {
-                Text("每条命令独立执行，不保留 cd 等状态")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                HStack {
-                    TextField("输入命令", text: $command)
-                        .textFieldStyle(.roundedBorder)
-                        .textInputAutocapitalization(.never)
-                        .disableAutocorrection(true)
-                        .onSubmit(run)
-                        .disabled(isRunning)
-                    if isRunning {
-                        ProgressView()
-                    } else {
-                        Button("运行", action: run)
-                            .buttonStyle(.borderedProminent)
-                            .disabled(command.trimmingCharacters(in: .whitespaces).isEmpty)
-                    }
+            HStack(spacing: 8) {
+                TextField("输入命令", text: $command)
+                    .textFieldStyle(.roundedBorder)
+                    .font(outputFont)
+                    .textInputAutocapitalization(.never)
+                    .disableAutocorrection(true)
+                    .onSubmit(run)
+                    .disabled(isRunning)
+                if isRunning {
+                    ProgressView()
+                } else {
+                    Button("运行", action: run)
+                        .buttonStyle(.borderedProminent)
+                        .disabled(command.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
-            .padding()
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
         }
         .navigationTitle("SSH 命令")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItemGroup(placement: .navigationBarTrailing) {
+                Button {
+                    lines.removeAll()
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .disabled(lines.isEmpty || isRunning)
+                Button {
+                    showInfo = true
+                } label: {
+                    Image(systemName: "info.circle")
+                }
+            }
+        }
+        .popover(isPresented: $showInfo) {
+            Text("每条命令在独立通道中执行，不保留 cd 等状态；输出为命令的标准输出与标准错误的合并结果。")
+                .font(.callout)
+                .padding()
+                .presentationCompactAdaptation(.popover)
+        }
     }
 
     private func run() {
