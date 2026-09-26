@@ -16,6 +16,9 @@ struct FileBrowserView: View {
     @State private var renameTarget: URL?
     @State private var errorMessage: String?
     @State private var showError = false
+    /// 诊断用：当前被隐藏的记录数（v13.3）。若文件"复活"但这里仍大于 0，
+    /// 说明是过滤失效；若这里归零，说明隐藏记录被清空了。
+    @State private var hiddenCount = 0
 
     var body: some View {
         Group {
@@ -45,6 +48,11 @@ struct FileBrowserView: View {
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button("移出列表", role: .destructive) { delete(url) }
                         }
+                    }
+                    if hiddenCount > 0 {
+                        Text("已从列表隐藏 \(hiddenCount) 个文件，文件保留在设备中")
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
                     }
                 }
             }
@@ -122,6 +130,7 @@ struct FileBrowserView: View {
             if d0 != d1 { return d0 }
             return $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending
         }
+        hiddenCount = documents.hiddenLocalPaths.count
     }
 
     private func open(_ url: URL) {
