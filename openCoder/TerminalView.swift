@@ -11,12 +11,22 @@ import SwiftTerm
 struct TerminalView: View {
     let serverID: UUID
     /// 从 SFTP 页点终端图标进入时，打开后自动 cd 到的远端路径；nil 表示不 cd。
+    /// 仅新会话生效；复用保持中的会话时不执行（保持"继续之前状态"的语义）。
     let initialPath: String?
     @ObservedObject var servers: ServerStore
     @ObservedObject var settings: SettingsStore
     @Environment(\.colorScheme) private var colorScheme
 
-    @StateObject private var shell = InteractiveShell()
+    /// 会话来自 TerminalSessionCache（按服务器保留），"会话保持"打开时可复用。
+    @StateObject private var shell: InteractiveShell
+
+    init(serverID: UUID, initialPath: String?, servers: ServerStore, settings: SettingsStore) {
+        self.serverID = serverID
+        self.initialPath = initialPath
+        self.servers = servers
+        self.settings = settings
+        _shell = StateObject(wrappedValue: TerminalSessionCache.shared.shell(for: serverID))
+    }
 
     var body: some View {
         Group {
@@ -52,11 +62,24 @@ struct TerminalView: View {
         .navigationTitle(servers.server(id: serverID)?.name ?? "SSH 终端")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear(perform: connect)
-        .onDisappear { shell.stop() }
+        .onDisappear {
+            if settings.terminalResumeSession {
+                // 会话保持：只与视图解绑，会话在后台继续（输出暂存，重进时补上）
+                shell.detach()
+            } else {
+                shell.stop()
+            }
+        }
     }
 
     private func connect() {
         guard let server = servers.server(id: serverID) else { return }
+        // 会话保持且上次会话还活着：直接复用，不重开；
+        // makeUIView 重建时会重新把 onData 挂到新视图。
+        if settings.terminalResumeSession && shell.isAlive { return }
+        // 非保持模式（或旧会话已死）：先确保旧会话结束再开新会话。
+        // stop() 是同步的，配合 generation 守卫，旧 task 的异步收尾不会污染新会话。
+        shell.stop()
         shell.start(server: server, initialPath: initialPath)
     }
 }

@@ -96,6 +96,11 @@ struct SettingsView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                     DSGroupCard(title: "连接") {
+                        SettingRow(icon: "apple.terminal", iconTint: .blue, title: "终端会话保持") {
+                            Toggle("", isOn: $settings.terminalResumeSession)
+                                .labelsHidden()
+                        }
+                        SettingDivider()
                         Button(role: .destructive) {
                             showDisconnectConfirm = true
                         } label: {
@@ -110,6 +115,11 @@ struct SettingsView: View {
                         }
                         .buttonStyle(.plain)
                     }
+                    Text("打开后，离开终端再回来会继续之前的会话（当前目录、运行中的程序都保留）；关闭则每次进入终端都是全新会话。")
+                        .font(DSFonts.sm)
+                        .foregroundColor(DSColors.muted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, -14)
                     Text("断开后下次操作时会自动重连。")
                         .font(DSFonts.sm)
                         .foregroundColor(DSColors.muted)

@@ -38,13 +38,19 @@ final class InteractiveShell: ObservableObject {
 
     private var task: Task<Void, Never>?
     private var outputTask: Task<Void, Never>?
+    /// 会话代际：stop()→start() 背靠背调用时，旧 task 的收尾（MainActor 上排队，
+    /// 必晚于 start() 执行）不能覆盖新会话的 state / 输入流 / task 引用。
+    private var generation = 0
     /// UI → 远端的输入流入口；nil 表示当前没有活跃会话。
     private var inputContinuation: AsyncStream<SSHManager.PTYInput>.Continuation?
     /// 视图先布局、会话未建好时暂存尺寸，start 时作为 PTY 初始尺寸。
     private var pendingResize: (cols: Int, rows: Int)?
+    /// 是否调用过 start()（区分"全新 shell"和"曾连接过的 shell"）。
+    private var hasStarted = false
 
     func start(server: ServerConfig, initialPath: String? = nil) {
         guard task == nil else { return }
+        hasStarted = true
         // 上一会话残留的输入流（shell 自行退出的情况）：先结束，
         // 让旧的转发任务退出，避免写到已关闭的通道。
         inputContinuation?.finish()
@@ -60,6 +66,9 @@ final class InteractiveShell: ObservableObject {
 
         let initialSize = pendingResize ?? (cols: 80, rows: 24)
         pendingResize = nil
+        // 新代际：旧 task 的异步收尾会被 generation 守卫拦下，不影响新会话
+        generation += 1
+        let gen = generation
 
         // 远端输出 → 终端仿真器（本任务继承 MainActor，直接调 didReceive）
         outputTask?.cancel()
@@ -87,6 +96,7 @@ final class InteractiveShell: ObservableObject {
                 cols: initialSize.cols, rows: initialSize.rows,
                 input: inputStream,
                 output: outputCont,
+                generation: gen,
                 onReady: {
                     readyCont.yield(())
                     readyCont.finish()
@@ -132,6 +142,7 @@ final class InteractiveShell: ObservableObject {
         cols: Int, rows: Int,
         input: AsyncStream<SSHManager.PTYInput>,
         output: AsyncStream<[UInt8]>.Continuation,
+        generation gen: Int,
         onReady: @Sendable @escaping () -> Void
     ) async {
         do {
@@ -139,15 +150,19 @@ final class InteractiveShell: ObservableObject {
                 server: server, cols: cols, rows: rows,
                 input: input, output: output, onReady: onReady
             )
-            // runPTY 正常返回 = shell 已退出
-            state = .ended
+            // runPTY 正常返回 = shell 已退出；只有当前代际才更新状态
+            if gen == generation { state = .ended }
         } catch {
-            // stop() 的取消不算失败
-            state = Task.isCancelled ? .ended : .failed(describeSSHError(error))
+            // stop() 的取消不算失败；过期代际的收尾直接丢弃
+            if gen == generation {
+                state = Task.isCancelled ? .ended : .failed(describeSSHError(error))
+            }
         }
-        inputContinuation?.finish()
-        inputContinuation = nil
-        task = nil
+        if gen == generation {
+            inputContinuation?.finish()
+            inputContinuation = nil
+            task = nil
+        }
     }
 
     private func didReceive(_ bytes: [UInt8]) {
@@ -164,4 +179,49 @@ final class InteractiveShell: ObservableObject {
     private func shellEscape(_ path: String) -> String {
         "'" + path.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
+
+    /// 会话是否还活着（连接中或已连接），离开后可复用；failed/ended 需要重开。
+    /// 注意：全新未 start 过的 shell 初始 state 就是 .connecting，必须用
+    /// hasStarted 排除，否则首次进入会被误判为"复用"而永远连不上。
+    var isAlive: Bool {
+        guard hasStarted else { return false }
+        switch state {
+        case .connecting, .connected: return true
+        case .failed, .ended: return false
+        }
+    }
+
+    /// 与当前视图解绑：不断开远端会话，后续输出暂存到 pendingData，
+    /// 下次挂载 onData 时一次性补上。用于"终端会话保持"模式离开页面时。
+    func detach() {
+        onData = nil
+    }
+}
+
+/// 终端会话缓存：按服务器 ID 在内存中保留 InteractiveShell，
+/// 使"进入终端继续上次会话"成为可能（设置 → 连接 → 终端会话保持）。
+///
+/// - 会话只在内存中保留，App 重启后消失。
+/// - 离开页面时由 TerminalView 决定 stop（结束会话）还是 detach（后台保持）。
+/// - 服务器删除/编辑后底层 SSH 已断开，会话自然失效，下次进入自动重开。
+@MainActor
+final class TerminalSessionCache {
+    static let shared = TerminalSessionCache()
+    private init() {}
+
+    private var sessions: [UUID: InteractiveShell] = [:]
+
+    func shell(for serverID: UUID) -> InteractiveShell {
+        if let existing = sessions[serverID] { return existing }
+        let shell = InteractiveShell()
+        sessions[serverID] = shell
+        return shell
+    }
+
+    /// 丢弃指定服务器的会话（删除服务器时调用，避免无用残留）。
+    func discard(serverID: UUID) {
+        sessions[serverID]?.stop()
+        sessions.removeValue(forKey: serverID)
+    }
+}
 }

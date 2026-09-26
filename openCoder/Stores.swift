@@ -28,7 +28,7 @@ enum AppColorScheme: String, CaseIterable, Identifiable {
     }
 }
 
-/// App 设置：自动换行、行号显示、等宽字体、字号与行距（字体相关设置终端与编辑器共用）。
+/// App 设置：自动换行、行号显示、等宽字体、字号与行距（字体相关设置终端与编辑器共用）、终端会话保持。
 @MainActor
 final class SettingsStore: ObservableObject {
     @Published var wordWrap: Bool {
@@ -49,6 +49,10 @@ final class SettingsStore: ObservableObject {
     @Published var appColorScheme: AppColorScheme {
         didSet { UserDefaults.standard.set(appColorScheme.rawValue, forKey: "opencoder.appColorScheme") }
     }
+    /// 终端会话保持：打开后离开终端再回来继续之前的会话；关闭则每次进入都是新会话。
+    @Published var terminalResumeSession: Bool {
+        didSet { UserDefaults.standard.set(terminalResumeSession, forKey: "opencoder.terminalResumeSession") }
+    }
 
     init() {
         let defaults = UserDefaults.standard
@@ -64,6 +68,7 @@ final class SettingsStore: ObservableObject {
         let savedSpacing = defaults.object(forKey: "opencoder.lineSpacing") as? Double ?? 2
         self.lineSpacing = min(max(savedSpacing, 0), 12)
         self.appColorScheme = AppColorScheme(rawValue: defaults.string(forKey: "opencoder.appColorScheme") ?? "") ?? .system
+        self.terminalResumeSession = defaults.object(forKey: "opencoder.terminalResumeSession") as? Bool ?? false
     }
 }
 

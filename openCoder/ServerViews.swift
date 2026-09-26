@@ -72,6 +72,7 @@ struct ServerListView: View {
             Button("删除", role: .destructive) {
                 if let server = pendingDelete {
                     servers.delete(server)
+                    TerminalSessionCache.shared.discard(serverID: server.id)
                     Task {
                         await SSHManager.shared.disconnect(serverID: server.id)
                         ToastCenter.shared.show("已删除服务器")
