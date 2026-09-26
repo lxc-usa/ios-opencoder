@@ -40,10 +40,10 @@ struct FileBrowserView: View {
                         }
                         .contextMenu {
                             Button("重命名") { renameTarget = url; newName = url.lastPathComponent }
-                            Button("从列表移除", role: .destructive) { delete(url) }
+                            Button("移出列表", role: .destructive) { delete(url) }
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            Button("移除", role: .destructive) { delete(url) }
+                            Button("移出列表", role: .destructive) { delete(url) }
                         }
                     }
                 }
