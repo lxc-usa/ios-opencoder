@@ -2,6 +2,7 @@ import SwiftUI
 import Runestone
 
 /// 编辑器宿主：顶部标签页条 + Runestone 编辑器。
+@MainActor
 struct EditorHostView: View {
     @ObservedObject var documents: DocumentManager
     @ObservedObject var settings: SettingsStore
@@ -80,6 +81,7 @@ struct EditorHostView: View {
 /// EditorHostView 只观察 DocumentManager；doc.isLoading 从 true 变 false 时
 /// documents 数组本身没变，SwiftUI 不会重算该区域，界面永久卡在"加载中…"。
 /// 现在由独立视图持有 @ObservedObject，状态变化即刷新。
+@MainActor
 private struct DocumentContentView: View {
     @ObservedObject var doc: OpenDocument
     @ObservedObject var documents: DocumentManager
@@ -138,6 +140,7 @@ private struct DocumentContentView: View {
 }
 
 /// 单个标签页按钮。
+@MainActor
 private struct TabButton: View {
     @ObservedObject var doc: OpenDocument
     let isSelected: Bool
@@ -177,6 +180,7 @@ private struct TabButton: View {
 }
 
 /// 绑定单个文档的编辑器视图（观察文档文本变化；工具栏放这里，保存按钮随 dirty 状态实时更新）。
+@MainActor
 private struct DocEditorView: View {
     @ObservedObject var doc: OpenDocument
     @ObservedObject var documents: DocumentManager

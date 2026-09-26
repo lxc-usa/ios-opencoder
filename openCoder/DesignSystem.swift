@@ -39,6 +39,7 @@ enum DSSpace {
 // MARK: - 设置行
 
 /// iOS 设置风格的行：圆角图标 + 标题 + 右侧自定义内容。
+@MainActor
 struct SettingRow<Trailing: View>: View {
     let icon: String
     let iconTint: Color
@@ -103,6 +104,7 @@ extension SettingRow where Trailing == AnyView {
 }
 
 /// 行之间的 hairline 分隔线（与图标左对齐）。
+@MainActor
 struct SettingDivider: View {
     var body: some View {
         Divider()
@@ -113,6 +115,7 @@ struct SettingDivider: View {
 // MARK: - 分组卡片
 
 /// 带标题的分组卡片，替代 Form 的 Section。
+@MainActor
 struct DSGroupCard<Content: View>: View {
     let title: String?
     @ViewBuilder let content: Content
@@ -142,6 +145,7 @@ struct DSGroupCard<Content: View>: View {
 // MARK: - 统一空态
 
 /// 全 App 统一的空状态：图标 + 标题 + 说明 + 可选操作按钮。
+@MainActor
 struct EmptyState: View {
     let icon: String
     let title: String
@@ -198,6 +202,7 @@ final class ToastCenter: ObservableObject {
     }
 }
 
+@MainActor
 private struct ToastOverlay: ViewModifier {
     @ObservedObject var center = ToastCenter.shared
 

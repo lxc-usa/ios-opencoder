@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// 服务器列表：添加 / 编辑 / 删除 / 进入 SFTP 浏览 / 打开 SSH 命令终端。
+@MainActor
 struct ServerListView: View {
     @ObservedObject var servers: ServerStore
     @Binding var path: [ServerNav]
@@ -86,6 +87,7 @@ struct ServerListView: View {
 }
 
 /// 添加 / 编辑服务器。密码只写入 Keychain。
+@MainActor
 struct ServerFormView: View {
     @ObservedObject var servers: ServerStore
     let server: ServerConfig?

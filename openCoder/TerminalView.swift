@@ -2,6 +2,7 @@ import SwiftUI
 
 /// SSH 命令控制台：输入命令、执行并查看合并输出。
 /// 注意：每条命令在独立 channel 中执行，无持久 shell（cd 等状态不保留）。
+@MainActor
 struct TerminalView: View {
     let serverID: UUID
     @ObservedObject var servers: ServerStore

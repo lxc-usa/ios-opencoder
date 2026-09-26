@@ -28,6 +28,7 @@ final class AppState: ObservableObject {
     }
 }
 
+@MainActor
 struct RootView: View {
     @EnvironmentObject private var appState: AppState
 
@@ -51,6 +52,7 @@ enum FileNav: Hashable {
     case folder(URL)
 }
 
+@MainActor
 struct FilesTabView: View {
     @ObservedObject var documents: DocumentManager
     @ObservedObject var settings: SettingsStore
@@ -79,6 +81,7 @@ enum ServerNav: Hashable {
     case editor
 }
 
+@MainActor
 struct ServersTabView: View {
     @ObservedObject var servers: ServerStore
     @ObservedObject var documents: DocumentManager

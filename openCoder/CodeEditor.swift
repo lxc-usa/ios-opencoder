@@ -13,6 +13,7 @@ final class FindTrigger: ObservableObject {
 }
 
 /// Runestone TextView 的 SwiftUI 封装。
+@MainActor
 struct CodeEditor: UIViewRepresentable {
     @Binding var text: String
     let language: TreeSitterLanguage

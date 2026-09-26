@@ -2,6 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// 本地文件浏览器：浏览 Documents 目录，支持新建 / 重命名 / 删除 / 导入。
+@MainActor
 struct FileBrowserView: View {
     let directory: URL
     @ObservedObject var documents: DocumentManager

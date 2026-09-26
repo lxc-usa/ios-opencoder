@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// SFTP 远程目录浏览：进入子目录、打开文件进行编辑。
+@MainActor
 struct SFTPBrowserView: View {
     let serverID: UUID
     let path: String

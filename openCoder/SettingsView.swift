@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// App 设置。
+@MainActor
 struct SettingsView: View {
     @ObservedObject var settings: SettingsStore
 
