@@ -1,0 +1,206 @@
+import SwiftUI
+
+/// 编辑器宿主：顶部标签页条 + Runestone 编辑器。
+struct EditorHostView: View {
+    @ObservedObject var documents: DocumentManager
+    @ObservedObject var settings: SettingsStore
+
+    @StateObject private var findTrigger = FindTrigger()
+    @State private var pendingClose: OpenDocument?
+    @State private var showCloseAlert = false
+    @State private var saveError: String?
+    @State private var showSaveError = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            tabStrip
+            Divider()
+            if let doc = documents.selected {
+                editorArea(for: doc)
+            } else {
+                EmptyState(
+                    icon: "doc.text",
+                    title: "没有打开的文件",
+                    message: "从「文件」或「服务器」中打开一个文件开始编辑"
+                )
+            }
+        }
+        .navigationTitle(documents.selected?.title ?? "编辑器")
+        .navigationBarTitleDisplayMode(.inline)
+        .alert("有未保存的更改", isPresented: $showCloseAlert) {
+            Button("保存并关闭") { saveAndClose() }
+            Button("直接关闭", role: .destructive) {
+                if let doc = pendingClose { documents.close(doc) }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("「\(pendingClose?.title ?? "")」有未保存的更改，要怎么处理？")
+        }
+        .alert("保存失败", isPresented: $showSaveError) {
+            Button("好", role: .cancel) {}
+        } message: {
+            Text(saveError ?? "")
+        }
+    }
+
+    // MARK: - 标签页条
+
+    private var tabStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(documents.documents) { doc in
+                    TabButton(
+                        doc: doc,
+                        isSelected: documents.selectedID == doc.id,
+                        onSelect: { documents.selectedID = doc.id },
+                        onClose: { requestClose(doc) }
+                    )
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+        }
+        .background(Color(.systemGroupedBackground))
+    }
+
+    // MARK: - 编辑区
+
+    @ViewBuilder
+    private func editorArea(for doc: OpenDocument) -> some View {
+        if doc.isLoading {
+            ProgressView("加载中…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let error = doc.loadError {
+            EmptyState(
+                icon: "exclamationmark.triangle",
+                title: "打开失败",
+                message: error,
+                actionTitle: "关闭",
+                action: { documents.close(doc) }
+            )
+        } else {
+            DocEditorView(
+                doc: doc,
+                documents: documents,
+                settings: settings,
+                findTrigger: findTrigger,
+                onSaveError: { message in
+                    saveError = message
+                    showSaveError = true
+                }
+            )
+        }
+    }
+
+    // MARK: - 关闭
+
+    private func requestClose(_ doc: OpenDocument) {
+        if doc.isDirty {
+            pendingClose = doc
+            showCloseAlert = true
+        } else {
+            documents.close(doc)
+        }
+    }
+
+    private func saveAndClose() {
+        guard let doc = pendingClose else { return }
+        Task {
+            do {
+                try await documents.save(doc)
+                documents.close(doc)
+            } catch {
+                saveError = error.localizedDescription
+                showSaveError = true
+            }
+            pendingClose = nil
+        }
+    }
+}
+
+/// 单个标签页按钮。
+private struct TabButton: View {
+    @ObservedObject var doc: OpenDocument
+    let isSelected: Bool
+    let onSelect: () -> Void
+    let onClose: () -> Void
+
+    var body: some View {
+        HStack(spacing: 2) {
+            Button(action: onSelect) {
+                HStack(spacing: 5) {
+                    if doc.isDirty {
+                        Circle()
+                            .fill(Color.orange)
+                            .frame(width: 7, height: 7)
+                    }
+                    Text(doc.title)
+                        .lineLimit(1)
+                        .font(.subheadline)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(isSelected ? Color.accentColor.opacity(0.18) : Color.clear)
+                .cornerRadius(8)
+            }
+            .buttonStyle(.plain)
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .padding(6)
+            }
+            .buttonStyle(.plain)
+        }
+        .background(isSelected ? Color(.secondarySystemGroupedBackground) : Color.clear)
+        .cornerRadius(8)
+    }
+}
+
+/// 绑定单个文档的编辑器视图（观察文档文本变化；工具栏放这里，保存按钮随 dirty 状态实时更新）。
+private struct DocEditorView: View {
+    @ObservedObject var doc: OpenDocument
+    @ObservedObject var documents: DocumentManager
+    @ObservedObject var settings: SettingsStore
+    @ObservedObject var findTrigger: FindTrigger
+    var onSaveError: (String) -> Void
+
+    @State private var isSaving = false
+
+    var body: some View {
+        CodeEditor(
+            text: $doc.text,
+            language: TreeSitterLanguage.forFileExtension(doc.fileExtension),
+            showLineNumbers: settings.showLineNumbers,
+            wrapLines: settings.wordWrap,
+            findTrigger: findTrigger
+        )
+        .toolbar {
+            ToolbarItemGroup(placement: .navigationBarTrailing) {
+                Button("查找") { findTrigger.request() }
+                Button("替换") { findTrigger.request(replace: true) }
+                if isSaving {
+                    ProgressView()
+                } else {
+                    Button("保存") { save() }
+                        .bold()
+                        .disabled(!doc.isDirty)
+                        .keyboardShortcut("s", modifiers: .command)
+                }
+            }
+        }
+    }
+
+    private func save() {
+        isSaving = true
+        Task {
+            do {
+                try await documents.save(doc)
+                ToastCenter.shared.show("已保存")
+            } catch {
+                onSaveError(error.localizedDescription)
+            }
+            isSaving = false
+        }
+    }
+}

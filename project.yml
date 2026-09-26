@@ -1,0 +1,124 @@
+name: openCoder
+options:
+  bundleIdPrefix: one.lxc.opencoder
+  deploymentTarget:
+    iOS: "17.0"
+  developmentLanguage: en
+  createIntermediateGroups: true
+
+configs:
+  Debug: debug
+  Release: release
+
+packages:
+  Runestone:
+    url: https://github.com/simonbs/Runestone
+    exactVersion: 0.5.2
+  TreeSitterLanguages:
+    url: https://github.com/simonbs/TreeSitterLanguages
+    exactVersion: 0.1.10
+  Citadel:
+    url: https://github.com/orlandos-nl/Citadel
+    exactVersion: 0.12.1
+  NIOSSH:
+    url: https://github.com/Wellz26/swift-nio-ssh.git
+    exactVersion: 0.3.4
+  SwiftNIO:
+    url: https://github.com/apple/swift-nio.git
+    from: 2.81.0
+
+targets:
+  openCoder:
+    type: application
+    platform: iOS
+    sources:
+      - path: openCoder
+    info:
+      path: openCoder/Info.plist
+    dependencies:
+      - package: Runestone
+        product: Runestone
+      - package: TreeSitterLanguages
+        product: TreeSitterJSON
+      - package: TreeSitterLanguages
+        product: TreeSitterAstroRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterBashRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterCRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterCPPRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterCSharpRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterCSSRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterElixirRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterElmRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterGoRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterHaskellRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterHTMLRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterJavaRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterJavaScriptRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterJSONRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterJSON5Runestone
+      - package: TreeSitterLanguages
+        product: TreeSitterJuliaRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterLaTeXRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterLuaRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterMarkdownRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterOCamlRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterPHPRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterPerlRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterPythonRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterRRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterRubyRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterRustRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterSCSSRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterSQLRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterSvelteRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterSwiftRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterTOMLRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterTSXRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterTypeScriptRunestone
+      - package: TreeSitterLanguages
+        product: TreeSitterYAMLRunestone
+      - package: Citadel
+        product: Citadel
+      - package: NIOSSH
+        product: NIOSSH
+      - package: SwiftNIO
+        product: NIO
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: one.lxc.opencoder
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ""
+        SWIFT_VERSION: "6.0"
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
