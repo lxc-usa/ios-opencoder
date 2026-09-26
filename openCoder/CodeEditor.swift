@@ -56,7 +56,7 @@ struct CodeEditor: UIViewRepresentable {
         }
     }
 
-    final class Coordinator: NSObject, TextViewDelegate {
+    final class Coordinator: NSObject, @preconcurrency TextViewDelegate {
         private let parent: CodeEditor
         var lastFindCounter = 0
 
@@ -64,7 +64,7 @@ struct CodeEditor: UIViewRepresentable {
             self.parent = parent
         }
 
-        @MainActor func textViewDidChange(_ textView: TextView) {
+        func textViewDidChange(_ textView: TextView) {
             let newText = textView.text
             if parent.text != newText {
                 parent.text = newText
