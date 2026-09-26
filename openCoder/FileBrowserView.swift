@@ -40,10 +40,12 @@ struct FileBrowserView: View {
                         }
                         .contextMenu {
                             Button("重命名") { renameTarget = url; newName = url.lastPathComponent }
-                            Button("删除", role: .destructive) { delete(url) }
+                            Button("从列表移除", role: .destructive) { delete(url) }
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button("移除", role: .destructive) { delete(url) }
                         }
                     }
-                    .onDelete(perform: deleteAt)
                 }
             }
         }
@@ -114,7 +116,8 @@ struct FileBrowserView: View {
             includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles]
         )) ?? []
-        items = urls.sorted {
+        // 用户从列表移除的记录不再显示，文件本身仍在磁盘上。
+        items = urls.filter { !documents.isHiddenLocalFile($0) }.sorted {
             let d0 = isDirectory($0), d1 = isDirectory($1)
             if d0 != d1 { return d0 }
             return $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending
@@ -141,6 +144,7 @@ struct FileBrowserView: View {
         let url = directory.appendingPathComponent(name)
         do {
             try "".write(to: url, atomically: true, encoding: .utf8)
+            documents.unhideLocalFile(url)
             reload()
             documents.openLocalFile(url: url)
             path.append(.editor)
@@ -155,6 +159,7 @@ struct FileBrowserView: View {
         let url = directory.appendingPathComponent(name)
         do {
             try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
+            documents.unhideLocalFile(url)
             reload()
         } catch {
             fail(error.localizedDescription)
@@ -168,26 +173,21 @@ struct FileBrowserView: View {
         let dest = target.deletingLastPathComponent().appendingPathComponent(name)
         do {
             try FileManager.default.moveItem(at: target, to: dest)
+            documents.unhideLocalFile(dest)
             reload()
         } catch {
             fail(error.localizedDescription)
         }
     }
 
+    /// 从列表移除：只删记录，文件保留在磁盘上。
+    /// 注意 iOS 没有废纸篓，FileManager.trashItem 会直接抛"功能不受支持"，
+    /// 此前报错的根因即在此。
     private func delete(_ url: URL) {
-        do {
-            try FileManager.default.trashItem(at: url, resultingItemURL: nil)
-            documents.closeDocuments(at: url)
-            reload()
-        } catch {
-            fail(error.localizedDescription)
-        }
-    }
-
-    private func deleteAt(_ offsets: IndexSet) {
-        for index in offsets {
-            delete(items[index])
-        }
+        documents.hideLocalFile(url)
+        documents.closeDocuments(at: url)
+        reload()
+        ToastCenter.shared.show("已从列表移除，文件保留在设备中")
     }
 
     private func importFiles(_ urls: [URL]) {
@@ -197,6 +197,7 @@ struct FileBrowserView: View {
             defer { url.stopAccessingSecurityScopedResource() }
             let dest = directory.appendingPathComponent(url.lastPathComponent)
             if (try? FileManager.default.copyItem(at: url, to: dest)) != nil {
+                documents.unhideLocalFile(dest)
                 count += 1
             }
         }

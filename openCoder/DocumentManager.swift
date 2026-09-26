@@ -20,6 +20,7 @@ final class DocumentManager: ObservableObject {
 
     init(servers: ServerStore) {
         self.servers = servers
+        loadHiddenLocalFiles()
     }
 
     var selected: OpenDocument? {
@@ -134,5 +135,47 @@ final class DocumentManager: ObservableObject {
             return false
         }
         doomed.forEach(close)
+    }
+
+    // MARK: - 列表隐藏（只从文件列表移除记录，文件本身保留在磁盘上）
+
+    /// 被用户从文件列表移除的本地路径（相对 Documents 根目录），持久化保存。
+    /// iOS 没有废纸篓，FileManager.trashItem 不可用；按用户要求，
+    /// 文件列表的"删除"只删记录、不删文件。
+    private(set) var hiddenLocalPaths: Set<String> = [] {
+        didSet {
+            UserDefaults.standard.set(Array(hiddenLocalPaths), forKey: "opencoder.hiddenLocalFiles")
+        }
+    }
+
+    /// 相对 Documents 根目录的路径（稳定标识，不随当前浏览目录变化）。
+    private func relativeLocalPath(_ url: URL) -> String? {
+        let root = Self.documentsDirectory.standardized.path
+        let p = url.standardized.path
+        guard p == root || p.hasPrefix(root + "/") else { return nil }
+        return p == root ? "." : String(p.dropFirst(root.count + 1))
+    }
+
+    /// 该 URL 是否已被用户从列表移除。
+    func isHiddenLocalFile(_ url: URL) -> Bool {
+        guard let rel = relativeLocalPath(url) else { return false }
+        return hiddenLocalPaths.contains(rel)
+    }
+
+    /// 从文件列表移除（文件保留在磁盘上）。
+    func hideLocalFile(_ url: URL) {
+        guard let rel = relativeLocalPath(url) else { return }
+        hiddenLocalPaths.insert(rel)
+    }
+
+    /// 同名文件重新出现（导入/新建/重命名）时取消隐藏，保证新文件可见。
+    func unhideLocalFile(_ url: URL) {
+        guard let rel = relativeLocalPath(url) else { return }
+        hiddenLocalPaths.remove(rel)
+    }
+
+    private func loadHiddenLocalFiles() {
+        let saved = UserDefaults.standard.stringArray(forKey: "opencoder.hiddenLocalFiles") ?? []
+        hiddenLocalPaths = Set(saved)
     }
 }
