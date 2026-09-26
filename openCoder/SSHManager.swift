@@ -194,13 +194,41 @@ final class TOFUHostKeyValidator: NIOSSHClientServerAuthenticationDelegate, @unc
     }
 }
 
-/// SSH / SFTP 连接管理：每个服务器复用一个 SSHClient。
+/// SSH / SFTP 连接管理：每个服务器复用一个 SSHClient 和一个 SFTP 通道。
 actor SSHManager {
     static let shared = SSHManager()
 
     private var clients: [UUID: SSHClient] = [:]
+    /// 每个服务器复用一个 SFTP 通道。
+    /// 根因说明：之前每次 list/read/write 都调用 openSFTP() 开新通道却从不关闭，
+    /// OpenSSH 默认 MaxSessions=10，进几次目录开满后服务器拒绝新通道，
+    /// 报错 NIOSSHError.channelSetupRejected: Reason: 2 open failed。
+    private var sftpClients: [UUID: SFTPClient] = [:]
 
     private init() {}
+
+    // MARK: - SFTP 通道复用
+
+    /// 取可用的 SFTP 通道：有缓存且通道仍存活则复用，否则重开。
+    private func sftp(for server: ServerConfig) async throws -> SFTPClient {
+        let client = try await client(for: server)
+        if let cached = sftpClients[server.id], cached.isActive {
+            return cached
+        }
+        // 旧通道已死（或从未创建）：丢弃并重开。
+        // 注意：client(for:) 在 SSH 连接断开时已换新 client，旧 SFTP 通道
+        // 此时 isActive 为 false，会走到这里重开，不会串到旧连接上。
+        sftpClients.removeValue(forKey: server.id)
+        let sftp = try await client.openSFTP()
+        sftpClients[server.id] = sftp
+        return sftp
+    }
+
+    private func dropSFTP(serverID: UUID) async {
+        if let sftp = sftpClients.removeValue(forKey: serverID) {
+            try? await sftp.close()
+        }
+    }
 
     // MARK: - 连接
 
@@ -271,12 +299,16 @@ actor SSHManager {
     }
 
     func disconnect(serverID: UUID) async {
+        await dropSFTP(serverID: serverID)
         if let client = clients.removeValue(forKey: serverID) {
             try? await client.close()
         }
     }
 
     func disconnectAll() async {
+        for serverID in Array(sftpClients.keys) {
+            await dropSFTP(serverID: serverID)
+        }
         let all = Array(clients.values)
         clients.removeAll()
         for client in all {
@@ -297,8 +329,7 @@ actor SSHManager {
     }
 
     private func listDirectoryInner(server: ServerConfig, path: String) async throws -> [RemoteEntry] {
-        let client = try await client(for: server)
-        let sftp = try await client.openSFTP()
+        let sftp = try await sftp(for: server)
         // 解析为绝对路径，避免 "./" 前缀在后续读写中累积
         let basePath = try await sftp.getRealPath(atPath: path)
         let listing = try await sftp.listDirectory(atPath: basePath)
@@ -325,8 +356,7 @@ actor SSHManager {
 
     func readFile(server: ServerConfig, path: String) async throws -> String {
         do {
-            let client = try await client(for: server)
-            let sftp = try await client.openSFTP()
+            let sftp = try await sftp(for: server)
             var buffer = try await sftp.withFile(filePath: path, flags: .read) { file in
                 try await file.readAll()
             }
@@ -340,8 +370,7 @@ actor SSHManager {
 
     func writeFile(server: ServerConfig, path: String, text: String) async throws {
         do {
-            let client = try await client(for: server)
-            let sftp = try await client.openSFTP()
+            let sftp = try await sftp(for: server)
             var buffer = ByteBufferAllocator().buffer(capacity: text.utf8.count)
             buffer.writeString(text)
             let data = buffer
