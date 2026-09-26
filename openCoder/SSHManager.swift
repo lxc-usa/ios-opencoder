@@ -400,4 +400,99 @@ actor SSHManager {
             throw SSHManagerError.connectionFailed(stage: "执行命令", underlying: error)
         }
     }
+
+    // MARK: - 交互式 PTY
+
+    /// PTY 输入事件（UI → 远端）。全 Sendable，可跨 actor 传递。
+    enum PTYInput: Sendable {
+        /// 用户按键字节
+        case bytes([UInt8])
+        /// 终端尺寸变化
+        case resize(cols: Int, rows: Int)
+    }
+
+    /// 运行交互式 PTY 会话（login shell），直到远端 shell 退出或抛错才返回。
+    ///
+    /// 并发隔离（Swift 6 region 隔离）：
+    /// - `SSHClient` / `TTYOutput` / `TTYStdinWriter` / `ExecCommandOutput` 都不是
+    ///   Sendable：全程只在本 actor 隔离域内创建、使用、销毁，绝不跨 actor，
+    ///   因此 `client(for:)` 的返回值不需要 Sendable。
+    /// - 与 UI 层只交换 Sendable 值：输入走 `AsyncStream<PTYInput>`，
+    ///   输出走 `AsyncStream<[UInt8]>.Continuation`，
+    ///   就绪信号走 `@Sendable` 闭包（只捕获 Sendable 的 continuation）。
+    /// - `withPTY` 的 perform 闭包是非隔离的：`for try await` 直接跑在闭包体内，
+    ///   `ExecCommandOutput` 转成 `[UInt8]` 后才交出去，不跨隔离域。
+    /// - 输入转发子任务只捕获 `input` 流和装了 writer 的 `SendableBox`；
+    ///   writer 本体是 NIO Channel 的轻量包装，write/changeSize 最终调用
+    ///   `channel.writeAndFlush` / `triggerUserOutboundEvent`，NIO Channel 的
+    ///   这两个方法是线程安全的，可在任意任务中调用（见 SendableBox 注释）。
+    func runPTY(
+        server: ServerConfig,
+        cols: Int,
+        rows: Int,
+        input: AsyncStream<PTYInput>,
+        output: AsyncStream<[UInt8]>.Continuation,
+        onReady: @Sendable @escaping () -> Void
+    ) async throws {
+        let client = try await client(for: server)
+        let request = SSHChannelRequestEvent.PseudoTerminalRequest(
+            wantReply: true,
+            term: "xterm-256color",
+            terminalCharacterWidth: cols,
+            terminalRowHeight: rows,
+            terminalPixelWidth: 0,
+            terminalPixelHeight: 0,
+            terminalModes: SSHTerminalModes([:])
+        )
+        try await client.withPTY(request) { inbound, outbound in
+            // PTY 已建好，通知 UI 切 connected
+            onReady()
+            let writerBox = SendableBox(outbound)
+            // 用户输入 → 远端。子任务只捕获 Sendable 值（input 流 + 盒子）。
+            // 输出循环结束后 cancel；`for await` 不响应 cancel，真正的结束靠
+            // UI 层 finish 输入流（stop() / 会话收尾必调），任务随即退出。
+            let forwarder = Task {
+                for await event in input {
+                    switch event {
+                    case .bytes(let bytes):
+                        guard !bytes.isEmpty else { continue }
+                        var buffer = ByteBuffer()
+                        buffer.writeBytes(bytes)
+                        try? await writerBox.value.write(buffer)
+                    case .resize(let cols, let rows):
+                        try? await writerBox.value.changeSize(
+                            cols: cols, rows: rows, pixelWidth: 0, pixelHeight: 0)
+                    }
+                }
+            }
+            defer { forwarder.cancel() }
+            do {
+                for try await item in inbound {
+                    let bytes: [UInt8]
+                    switch item {
+                    case .stdout(let buffer), .stderr(let buffer):
+                        bytes = Array(buffer.readableBytesView)
+                    }
+                    if !bytes.isEmpty {
+                        output.yield(bytes)
+                    }
+                }
+            } catch {
+                // 通道关闭或出错：shell 已退出，视为正常结束
+            }
+            output.finish()
+        }
+    }
+}
+
+/// 把非 Sendable 的值装进 Sendable 盒子，跨隔离域使用时必须在注释里写清安全理由。
+///
+/// 本文件唯一用途：装 `TTYStdinWriter` 给 runPTY 的输入转发子任务用。
+/// 安全理由：`TTYStdinWriter` 内部只是 `Channel` 的轻量包装，无自身可变状态；
+/// `write` / `changeSize` 最终调用 `Channel.writeAndFlush` /
+/// `Channel.triggerUserOutboundEvent`，NIO 的 Channel 这两个方法是线程安全的，
+/// 可在任意线程/任务调用。通道关闭后的写入由 `try?` 吞掉，不抛错。
+private final class SendableBox<T>: @unchecked Sendable {
+    let value: T
+    init(_ value: T) { self.value = value }
 }

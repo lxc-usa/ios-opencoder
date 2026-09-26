@@ -72,6 +72,18 @@ private struct TerminalHostView: UIViewRepresentable {
         let tv = SwiftTerm.TerminalView(frame: .zero, font: terminalUIFont())
         applyAppearance(to: tv)
         tv.terminalDelegate = context.coordinator
+        // Coordinator 是非隔离的（SwiftTerm 的 delegate 方法都是非隔离要求），
+        // 只做转发；真正调 @MainActor 的 shell 的部分 hop 到 MainActor。
+        // 外层闭包是非 Sendable 的，捕获 weak shell 合法；内层 Task 与 shell
+        // 同为 MainActor 隔离，捕获合法（Swift 6 允许同隔离域捕获）。
+        let onSend: ([UInt8]) -> Void = { [weak shell] bytes in
+            Task { @MainActor in shell?.send(bytes) }
+        }
+        let onResize: (Int, Int) -> Void = { [weak shell] cols, rows in
+            Task { @MainActor in shell?.resize(cols: cols, rows: rows) }
+        }
+        context.coordinator.onSend = onSend
+        context.coordinator.onResize = onResize
         // 远端输出 → xterm 仿真器（InteractiveShell 保证主线程回调）
         shell.onData = { bytes in
             tv.feed(byteArray: ArraySlice(bytes))
@@ -103,25 +115,23 @@ private struct TerminalHostView: UIViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(shell: shell)
+        Coordinator()
     }
 
-    @MainActor
+    /// 非隔离：只为满足 SwiftTerm TerminalViewDelegate（其方法全是 nonisolated
+    /// 要求），把事件经闭包转出去，不直接碰 @MainActor 的 shell。
     final class Coordinator: NSObject, TerminalViewDelegate {
-        private let shell: InteractiveShell
-
-        init(shell: InteractiveShell) {
-            self.shell = shell
-        }
+        var onSend: (([UInt8]) -> Void)?
+        var onResize: ((Int, Int) -> Void)?
 
         /// 用户按键 → SSH 通道。
         func send(source: SwiftTerm.TerminalView, data: ArraySlice<UInt8>) {
-            shell.send(Array(data))
+            onSend?(Array(data))
         }
 
         /// 视图尺寸变化 → 通知远端 PTY（top/vi 重排版靠它）。
         func sizeChanged(source: SwiftTerm.TerminalView, newCols: Int, newRows: Int) {
-            shell.resize(cols: newCols, rows: newRows)
+            onResize?(newCols, newRows)
         }
 
         func setTerminalTitle(source: SwiftTerm.TerminalView, title: String) {}
