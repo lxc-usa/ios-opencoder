@@ -103,16 +103,17 @@ class AESCTRTransportProtection: NIOSSHTransportProtection {
 
     private func crypt(_ cryptor: CCCryptorRef, data: [UInt8]) throws -> [UInt8] {
         var out = [UInt8](repeating: 0, count: data.count)
+        let outCount = out.count // withUnsafeMutableBytes 期间不能再访问 out（独占访问规则）
         var moved = 0
         let status = data.withUnsafeBytes { inp in
             out.withUnsafeMutableBytes { outp in
                 CCCryptorUpdate(cryptor,
                                 inp.baseAddress, data.count,
-                                outp.baseAddress, out.count,
+                                outp.baseAddress, outCount,
                                 &moved)
             }
         }
-        guard status == kCCSuccess, moved == data.count else {
+        guard status == kCCSuccess, moved == outCount else {
             throw AESCTRTransportError.cryptoFailure(status: status)
         }
         return out
