@@ -1,5 +1,4 @@
 import SwiftUI
-import Runestone
 
 /// 编辑器宿主：顶部标签页条 + Runestone 编辑器。
 @MainActor
@@ -215,7 +214,7 @@ private struct DocEditorView: View {
     var body: some View {
         CodeEditor(
             text: $doc.text,
-            language: TreeSitterLanguage.forFileExtension(doc.fileExtension),
+            fileExtension: doc.fileExtension,
             showLineNumbers: settings.showLineNumbers,
             wrapLines: settings.wordWrap,
             findTrigger: findTrigger,

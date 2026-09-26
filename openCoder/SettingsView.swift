@@ -134,7 +134,7 @@ struct SettingsView: View {
                     }
 
                     DSGroupCard(title: "关于") {
-                        SettingRow(icon: "app.badge", title: "版本", value: "v16")
+                        SettingRow(icon: "app.badge", title: "版本", value: "v17")
                     }
                     Text("openCoder（开放码农）：轻量级文本 / 代码编辑器，支持 SFTP 远程编辑与 SSH 命令执行。")
                         .font(DSFonts.sm)

@@ -17,13 +17,17 @@ final class FindTrigger: ObservableObject {
 @MainActor
 struct CodeEditor: UIViewRepresentable {
     @Binding var text: String
-    let language: TreeSitterLanguage
+    let fileExtension: String
     var showLineNumbers: Bool
     var wrapLines: Bool
     var findTrigger: FindTrigger
     var monoFont: MonoFont
     var fontSize: CGFloat
     var lineSpacing: CGFloat
+
+    private var language: TreeSitterLanguage {
+        TreeSitterLanguage.forFileExtension(fileExtension)
+    }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -52,6 +56,7 @@ struct CodeEditor: UIViewRepresentable {
         context.coordinator.lastFontID = monoFont.id
         context.coordinator.lastFontSize = fontSize
         context.coordinator.lastLineSpacing = lineSpacing
+        context.coordinator.lastFileExtension = fileExtension
         return textView
     }
 
@@ -59,13 +64,19 @@ struct CodeEditor: UIViewRepresentable {
         if textView.text != text {
             textView.text = text
         }
+        // 标签页切换时 TextView 会被复用，语言必须跟着当前文件走，
+        // 否则先开 txt 再切回 swift 会导致 swift 没有高亮。
+        let coordinator = context.coordinator
+        if coordinator.lastFileExtension != fileExtension {
+            coordinator.lastFileExtension = fileExtension
+            textView.language = language
+        }
         if textView.showLineNumbers != showLineNumbers {
             textView.showLineNumbers = showLineNumbers
         }
         if textView.isLineWrappingEnabled != wrapLines {
             textView.isLineWrappingEnabled = wrapLines
         }
-        let coordinator = context.coordinator
         if coordinator.lastFontID != monoFont.id || coordinator.lastFontSize != fontSize {
             coordinator.lastFontID = monoFont.id
             coordinator.lastFontSize = fontSize
@@ -99,6 +110,7 @@ struct CodeEditor: UIViewRepresentable {
         var lastFontID: String?
         var lastFontSize: CGFloat = 0
         var lastLineSpacing: CGFloat = -1
+        var lastFileExtension: String?
 
         init(_ parent: CodeEditor) {
             self.parent = parent
