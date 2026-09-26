@@ -43,7 +43,7 @@ final class InteractiveShell: ObservableObject {
     /// 视图先布局、会话未建好时暂存尺寸，start 时作为 PTY 初始尺寸。
     private var pendingResize: (cols: Int, rows: Int)?
 
-    func start(server: ServerConfig) {
+    func start(server: ServerConfig, initialPath: String? = nil) {
         guard task == nil else { return }
         // 上一会话残留的输入流（shell 自行退出的情况）：先结束，
         // 让旧的转发任务退出，避免写到已关闭的通道。
@@ -68,9 +68,13 @@ final class InteractiveShell: ObservableObject {
                 self?.didReceive(bytes)
             }
         }
-        // PTY 建好 → 切 connected（只取第一个信号）
+        // PTY 建好 → 如带初始路径先 cd 过去（SFTP 页点终端图标进入），再切 connected。
+        // pty 的输入有内核缓冲，shell 尚未打印首个提示符也不丢字节。
         Task { [weak self] in
             for await _ in readyStream {
+                if let initialPath, !initialPath.isEmpty {
+                    self?.send(Array("cd -- \(shellEscape(initialPath))\n".utf8))
+                }
                 self?.state = .connected
                 break
             }
@@ -153,5 +157,11 @@ final class InteractiveShell: ObservableObject {
             pendingData.append(bytes)
             pendingBytes += bytes.count
         }
+    }
+
+    /// 路径做 shell 单引号转义：空格、`$`、反引号等特殊字符不再截断命令，
+    /// 内嵌单引号按 `'\''` 处理。
+    private func shellEscape(_ path: String) -> String {
+        "'" + path.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 }

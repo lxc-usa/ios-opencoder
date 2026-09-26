@@ -10,6 +10,8 @@ import SwiftTerm
 @MainActor
 struct TerminalView: View {
     let serverID: UUID
+    /// 从 SFTP 页点终端图标进入时，打开后自动 cd 到的远端路径；nil 表示不 cd。
+    let initialPath: String?
     @ObservedObject var servers: ServerStore
     @ObservedObject var settings: SettingsStore
     @Environment(\.colorScheme) private var colorScheme
@@ -47,7 +49,7 @@ struct TerminalView: View {
                 )
             }
         }
-        .navigationTitle("SSH 终端")
+        .navigationTitle(servers.server(id: serverID)?.name ?? "SSH 终端")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear(perform: connect)
         .onDisappear { shell.stop() }
@@ -55,7 +57,35 @@ struct TerminalView: View {
 
     private func connect() {
         guard let server = servers.server(id: serverID) else { return }
-        shell.start(server: server)
+        shell.start(server: server, initialPath: initialPath)
+    }
+}
+
+/// SwiftTerm.TerminalView 的子类：修复横竖屏切换后键盘快捷栏留白。
+///
+/// 根因（SwiftTerm v1.20.0 源码实锤）：TerminalAccessory 的
+/// traitCollectionDidChange 里 setupUI() 被提前 return 掉了，只靠
+/// bounds.didSet 重建；而 allowsSelfSizing 下键盘宿主缓存的尺寸可能与
+/// 内部布局不一致，导致第一行键（esc/ctrl/方向键…）与系统键盘之间留白。
+/// 这里在尺寸类型真的变化后，强制重建 accessory 并让键盘重新加载输入视图。
+@MainActor
+private final class RotationSafeTerminalView: SwiftTerm.TerminalView {
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        let old = previousTraitCollection
+        let new = traitCollection
+        guard old?.horizontalSizeClass != new.horizontalSizeClass ||
+              old?.verticalSizeClass != new.verticalSizeClass else { return }
+        // 等一帧，让旋转动画先更新 accessory 的 bounds，再按最终宽度重建
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if let accessory = self.inputAccessoryView as? TerminalAccessory {
+                accessory.setupUI()
+                accessory.setNeedsLayout()
+                accessory.layoutIfNeeded()
+            }
+            self.reloadInputViews()
+        }
     }
 }
 
@@ -69,7 +99,7 @@ private struct TerminalHostView: UIViewRepresentable {
     var colorScheme: ColorScheme
 
     func makeUIView(context: Context) -> SwiftTerm.TerminalView {
-        let tv = SwiftTerm.TerminalView(frame: .zero, font: terminalUIFont())
+        let tv = RotationSafeTerminalView(frame: .zero, font: terminalUIFont())
         applyAppearance(to: tv)
         tv.terminalDelegate = context.coordinator
         // Coordinator 是非隔离的（SwiftTerm 的 delegate 方法都是非隔离要求），

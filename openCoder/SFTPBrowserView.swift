@@ -67,7 +67,7 @@ struct SFTPBrowserView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .navigationBarTrailing) {
-                Button(action: { navPath.append(.terminal(serverID: serverID)) }) {
+                Button(action: { navPath.append(.terminal(serverID: serverID, initialPath: path == "." ? nil : path)) }) {
                     Image(systemName: "apple.terminal")
                 }
                 .accessibilityLabel("终端命令行")

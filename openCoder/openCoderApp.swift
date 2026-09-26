@@ -87,7 +87,7 @@ struct FilesTabView: View {
 
 enum ServerNav: Hashable {
     case browser(serverID: UUID, path: String)
-    case terminal(serverID: UUID)
+    case terminal(serverID: UUID, initialPath: String?)
     case editor
 }
 
@@ -105,8 +105,8 @@ struct ServersTabView: View {
                     switch nav {
                     case .browser(let serverID, let dirPath):
                         SFTPBrowserView(serverID: serverID, path: dirPath, servers: servers, documents: documents, navPath: $path)
-                    case .terminal(let serverID):
-                        TerminalView(serverID: serverID, servers: servers, settings: settings)
+                    case .terminal(let serverID, let initialPath):
+                        TerminalView(serverID: serverID, initialPath: initialPath, servers: servers, settings: settings)
                     case .editor:
                         EditorHostView(documents: documents, settings: settings)
                     }

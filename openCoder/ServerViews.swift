@@ -47,7 +47,7 @@ struct ServerListView: View {
                             }
                             Button("编辑") { editing = server }
                                 .tint(.orange)
-                            Button("终端") { path.append(.terminal(serverID: server.id)) }
+                            Button("终端") { path.append(.terminal(serverID: server.id, initialPath: nil)) }
                                 .tint(.blue)
                         }
                     }
