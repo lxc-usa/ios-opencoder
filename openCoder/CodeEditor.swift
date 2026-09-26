@@ -41,6 +41,11 @@ struct CodeEditor: UIViewRepresentable {
         textView.smartInsertDeleteType = .no
         // iOS 16+ 系统查找替换
         textView.isFindInteractionEnabled = true
+        // Runestone 把文本区背景写死为 .white，深色下会白字白底看不见。
+        // 改成深浅自适应：浅色白、深色黑（与深色行号栏一致），trait 变化时自动重算。
+        textView.backgroundColor = UIColor { traits in
+            traits.userInterfaceStyle == .dark ? .black : .white
+        }
         let uiFont = monoFont.uiFont(size: fontSize)
         textView.setState(TextViewState(text: text, theme: MonoTheme(font: uiFont), language: language))
         textView.lineHeightMultiplier = Self.lineHeightMultiplier(for: uiFont, spacing: lineSpacing)
