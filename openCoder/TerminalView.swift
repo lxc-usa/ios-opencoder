@@ -14,7 +14,7 @@ struct TerminalView: View {
     @State private var showInfo = false
 
     private var outputFont: Font {
-        settings.terminalFont.font(size: settings.terminalFontSize)
+        settings.monoFont.font(size: settings.monoFontSize)
     }
 
     var body: some View {
@@ -31,6 +31,7 @@ struct TerminalView: View {
                         ForEach(lines) { line in
                             Text(line.text)
                                 .font(outputFont)
+                                .lineSpacing(settings.lineSpacing)
                                 .foregroundColor(line.isError ? .red : (line.isCommand ? .accentColor : .primary))
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)

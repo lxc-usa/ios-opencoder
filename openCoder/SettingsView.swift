@@ -11,6 +11,18 @@ struct SettingsView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
+                    DSGroupCard(title: "外观") {
+                        SettingRow(icon: "circle.lefthalf.filled", iconTint: .blue, title: "配色方案") {
+                            Picker("", selection: $settings.appColorScheme) {
+                                ForEach(AppColorScheme.allCases) { mode in
+                                    Text(mode.displayName).tag(mode)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .frame(maxWidth: 230)
+                        }
+                    }
+
                     DSGroupCard(title: "编辑器") {
                         SettingRow(icon: "text.wrap", iconTint: .blue, title: "自动换行") {
                             Toggle("", isOn: $settings.wordWrap)
@@ -23,13 +35,13 @@ struct SettingsView: View {
                         }
                     }
 
-                    DSGroupCard(title: "终端") {
+                    DSGroupCard(title: "字体与排版") {
                         NavigationLink {
-                            TerminalFontPickerView(settings: settings)
+                            MonoFontPickerView(settings: settings)
                         } label: {
                             SettingRow(icon: "textformat", iconTint: .purple, title: "字体") {
                                 HStack(spacing: 6) {
-                                    Text(settings.terminalFont.displayName)
+                                    Text(settings.monoFont.displayName)
                                         .font(DSFonts.base)
                                         .foregroundColor(DSColors.muted)
                                     Image(systemName: "chevron.right")
@@ -42,11 +54,22 @@ struct SettingsView: View {
                         SettingDivider()
                         SettingRow(icon: "textformat.size", iconTint: .purple, title: "字号") {
                             HStack(spacing: 8) {
-                                Text("\(Int(settings.terminalFontSize)) pt")
+                                Text("\(Int(settings.monoFontSize)) pt")
                                     .font(DSFonts.base)
                                     .foregroundColor(DSColors.muted)
                                     .monospacedDigit()
-                                Stepper("", value: $settings.terminalFontSize, in: 10...20, step: 1)
+                                Stepper("", value: $settings.monoFontSize, in: 10...20, step: 1)
+                                    .labelsHidden()
+                            }
+                        }
+                        SettingDivider()
+                        SettingRow(icon: "arrow.up.and.down.text.horizontal", iconTint: .purple, title: "行距") {
+                            HStack(spacing: 8) {
+                                Text("\(Int(settings.lineSpacing)) pt")
+                                    .font(DSFonts.base)
+                                    .foregroundColor(DSColors.muted)
+                                    .monospacedDigit()
+                                Stepper("", value: $settings.lineSpacing, in: 0...12, step: 1)
                                     .labelsHidden()
                             }
                         }
@@ -56,7 +79,8 @@ struct SettingsView: View {
                                 .font(DSFonts.sm)
                                 .foregroundColor(DSColors.muted)
                             Text("$ ls -la\ntotal 48\ndrwxr-xr-x 12 root root 4096 09-26 13:55 .")
-                                .font(settings.terminalFont.font(size: settings.terminalFontSize))
+                                .font(settings.monoFont.font(size: settings.monoFontSize))
+                                .lineSpacing(settings.lineSpacing)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(10)
                                 .background(Color(.systemBackground))
@@ -65,6 +89,11 @@ struct SettingsView: View {
                         .padding(.horizontal, DSSpace.base)
                         .padding(.vertical, 10)
                     }
+                    Text("字体、字号、行距同时应用于终端与代码编辑器。")
+                        .font(DSFonts.sm)
+                        .foregroundColor(DSColors.muted)
+                        .padding(.horizontal, DSSpace.base)
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
                     DSGroupCard(title: "连接") {
                         Button(role: .destructive) {
@@ -120,15 +149,15 @@ struct SettingsView: View {
     }
 }
 
-/// 终端字体选择：每行带实时预览，点选即生效。
+/// 等宽字体选择：每行带实时预览，点选即生效（终端与代码编辑器共用）。
 @MainActor
-struct TerminalFontPickerView: View {
+struct MonoFontPickerView: View {
     @ObservedObject var settings: SettingsStore
 
     var body: some View {
-        List(TerminalFont.allCases) { font in
+        List(MonoFont.allCases) { font in
             Button {
-                settings.terminalFont = font
+                settings.monoFont = font
             } label: {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
@@ -144,7 +173,7 @@ struct TerminalFontPickerView: View {
                             .padding(.top, 2)
                     }
                     Spacer()
-                    if settings.terminalFont == font {
+                    if settings.monoFont == font {
                         Image(systemName: "checkmark")
                             .font(.headline)
                             .foregroundColor(.accentColor)
@@ -154,7 +183,7 @@ struct TerminalFontPickerView: View {
             }
             .buttonStyle(.plain)
         }
-        .navigationTitle("终端字体")
+        .navigationTitle("等宽字体")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

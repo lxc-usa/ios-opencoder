@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 @main
 struct openCoderApp: App {
@@ -13,11 +14,16 @@ struct openCoderApp: App {
 }
 
 /// App 级状态持有者：设置、服务器、打开的文档。
+///
+/// 设置变化会转发为 AppState 的变化，这样根视图的 `.preferredColorScheme`
+/// 等依赖设置的修饰符能在切换后即时生效。
 @MainActor
 final class AppState: ObservableObject {
     let settings: SettingsStore
     let servers: ServerStore
     let documents: DocumentManager
+
+    private var cancellables = Set<AnyCancellable>()
 
     init() {
         let settings = SettingsStore()
@@ -25,6 +31,9 @@ final class AppState: ObservableObject {
         self.settings = settings
         self.servers = servers
         self.documents = DocumentManager(servers: servers)
+        settings.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
     }
 }
 
@@ -42,6 +51,7 @@ struct RootView: View {
                 .tabItem { Label("设置", systemImage: "gear") }
         }
         .dsToast()
+        .preferredColorScheme(appState.settings.appColorScheme.preferred)
     }
 }
 

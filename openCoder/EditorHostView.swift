@@ -196,7 +196,10 @@ private struct DocEditorView: View {
             language: TreeSitterLanguage.forFileExtension(doc.fileExtension),
             showLineNumbers: settings.showLineNumbers,
             wrapLines: settings.wordWrap,
-            findTrigger: findTrigger
+            findTrigger: findTrigger,
+            monoFont: settings.monoFont,
+            fontSize: CGFloat(settings.monoFontSize),
+            lineSpacing: CGFloat(settings.lineSpacing)
         )
         .toolbar {
             ToolbarItemGroup(placement: .navigationBarTrailing) {
