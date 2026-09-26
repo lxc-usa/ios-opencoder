@@ -56,6 +56,7 @@ struct CodeEditor: UIViewRepresentable {
         }
     }
 
+    @MainActor
     final class Coordinator: NSObject, @preconcurrency TextViewDelegate {
         private let parent: CodeEditor
         var lastFindCounter = 0
