@@ -43,13 +43,11 @@ public struct RSASHA256Signature: NIOSSHSignatureProtocol {
     }
 
     public func write(to buffer: inout ByteBuffer) -> Int {
-        buffer.writeSSHString(rawRepresentation)
+        buffer.oc_writeSSHString(rawRepresentation)
     }
 
     public static func read(from buffer: inout ByteBuffer) throws -> Self {
-        guard let bytes = buffer.readSSHBuffer(),
-              let data = bytes.getData(at: 0, length: bytes.readableBytes),
-              !data.isEmpty else {
+        guard let data = buffer.oc_readSSHString(), !data.isEmpty else {
             throw RSAHostKeyError.malformedSignature
         }
         return Self(rawRepresentation: data)
@@ -66,13 +64,11 @@ public struct RSASHA512Signature: NIOSSHSignatureProtocol {
     }
 
     public func write(to buffer: inout ByteBuffer) -> Int {
-        buffer.writeSSHString(rawRepresentation)
+        buffer.oc_writeSSHString(rawRepresentation)
     }
 
     public static func read(from buffer: inout ByteBuffer) throws -> Self {
-        guard let bytes = buffer.readSSHBuffer(),
-              let data = bytes.getData(at: 0, length: bytes.readableBytes),
-              !data.isEmpty else {
+        guard let data = buffer.oc_readSSHString(), !data.isEmpty else {
             throw RSAHostKeyError.malformedSignature
         }
         return Self(rawRepresentation: data)
@@ -128,16 +124,14 @@ public struct RSASSHHostKey: NIOSSHPublicKeyProtocol {
         // 原样写回保证 exchange hash 的输入与服务器 blob 字节完全一致，
         // TOFU pin 的字节也保持稳定。
         var written = 0
-        written += buffer.writeSSHString(exponent)
-        written += buffer.writeSSHString(modulus)
+        written += buffer.oc_writeSSHString(exponent)
+        written += buffer.oc_writeSSHString(modulus)
         return written
     }
 
     public static func read(from buffer: inout ByteBuffer) throws -> Self {
-        guard let e = buffer.readSSHBuffer(),
-              let n = buffer.readSSHBuffer(),
-              let eData = e.getData(at: 0, length: e.readableBytes),
-              let nData = n.getData(at: 0, length: n.readableBytes),
+        guard let eData = buffer.oc_readSSHString(),
+              let nData = buffer.oc_readSSHString(),
               !eData.isEmpty, !nData.isEmpty else {
             throw RSAHostKeyError.malformedPublicKey
         }
@@ -194,14 +188,36 @@ public struct RSASHA512AdvertisedKey: NIOSSHPublicKeyProtocol {
     }
 }
 
+// MARK: - SSH wire 编解码（本文件私有）
+
+// NIOSSH 与 Citadel 的同名 helper 都是 internal，App target 不可见，
+// 这里自己实现。SSH "string" = uint32 大端长度 + 原始字节，
+// 与两家实现的线格式字节一致（已对照双方源码）。
+fileprivate extension ByteBuffer {
+    @discardableResult
+    mutating func oc_writeSSHString(_ data: Data) -> Int {
+        let count = data.count
+        writeInteger(UInt32(count))
+        writeBytes(data)
+        return 4 + count
+    }
+
+    mutating func oc_readSSHString() -> Data? {
+        guard let length = readInteger(as: UInt32.self),
+              let bytes = readBytes(length: Int(length)) else {
+            return nil
+        }
+        return Data(bytes)
+    }
+}
+
 // MARK: - SecKey 构造（X.509 SPKI）
 
 /// 把 SSH 的 (e, n) 组装成 SecKey 可用的 RSA 公钥。
 private enum RSASecKey {
     static func publicKey(modulus n: Data, exponent e: Data) -> SecKey? {
-        guard !n.isEmpty, !e.isEmpty, let spki = spkiDER(modulus: n, exponent: e) else {
-            return nil
-        }
+        guard !n.isEmpty, !e.isEmpty else { return nil }
+        let spki = spkiDER(modulus: n, exponent: e)
         let attrs: [CFString: Any] = [
             kSecAttrKeyType: kSecAttrKeyTypeRSA,
             kSecAttrKeyClass: kSecAttrKeyClassPublic,
