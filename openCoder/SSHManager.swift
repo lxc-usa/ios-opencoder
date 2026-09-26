@@ -223,18 +223,31 @@ actor SSHManager {
             authenticationMethod: { .passwordBased(username: username, password: password) },
             hostKeyValidator: .custom(TOFUHostKeyValidator(host: server.host, port: server.port))
         )
-        // Citadel 推荐的兼容算法集：NIOSSH 默认不支持 ssh-rsa 主机密钥，
-        // 这里补上 RSA 主机密钥、DH group14 密钥交换和 AES128CTR。
+        // 算法组装（不用 SSHAlgorithms.all，原因见下）。
         //
-        // 注意：依赖的 swift-nio-ssh fork 默认只带 AES-GCM 加密套件；
-        // 实测某些服务器既不提供 GCM 也不提供 aes128-ctr，这里再补上
-        // aes256-ctr / aes192-ctr（本 App 内实现，见 AESCTRCiphers.swift），
-        // 否则握手会报 NIOSSHError.keyExchangeNegotiationFailure。
-        var sshAlgorithms = SSHAlgorithms.all
+        // 1) 传输保护：fork 默认只有 AES-GCM；Citadel 的 .all 只补 aes128-ctr。
+        //    这里再补上本 App 实现的 aes256-ctr / aes192-ctr（见 AESCTRCiphers.swift）。
+        // 2) 密钥交换：沿用 .all 的 DH group14（兼容老服务器）。
+        // 3) 主机密钥：**不用** .all 的旧式 ssh-rsa（SHA1，OpenSSH 8.8+ 已禁用）；
+        //    改用本 App 实现的 RSA-SHA2（RFC 8332，见 RSASHA2HostKey.swift）。
+        //    2026-09-26 真机探针实测：OpenSSH 10.0p2 只提供 rsa-sha2-256/512，
+        //    不认旧 ssh-rsa，用 .all 的话主机密钥一项零交集直接握手失败。
+        var sshAlgorithms = SSHAlgorithms()
         sshAlgorithms.transportProtectionSchemes = .add([
             AES256CTRTransportProtection.self,
             AES192CTRTransportProtection.self,
             AES128CTR.self,
+        ])
+        sshAlgorithms.keyExchangeAlgorithms = .add([
+            DiffieHellmanGroup14Sha1.self,
+            DiffieHellmanGroup14Sha256.self,
+        ])
+        sshAlgorithms.publicKeyAlgorihtms = .add([
+            (RSASSHHostKey.self, RSASHA256Signature.self),
+            (RSASHA256AdvertisedKey.self, RSASHA512Signature.self),
+            // RSASHA512Signature 会被重复注册一次（NIOSSH 只按公钥类型去重），
+            // 无害：签名解析按前缀匹配，第一个命中即返回。
+            (RSASHA512AdvertisedKey.self, RSASHA512Signature.self),
         ])
         settings.algorithms = sshAlgorithms
         do {

@@ -25,7 +25,8 @@ enum SSHKexProbe {
         "curve25519-sha256, curve25519-sha256@libssh.org, " +
         "diffie-hellman-group14-sha1, diffie-hellman-group14-sha256"
     static let ourHostKey =
-        "ssh-ed25519, ecdsa-sha2-nistp384, ecdsa-sha2-nistp256, ecdsa-sha2-nistp521, ssh-rsa"
+        "ssh-ed25519, ecdsa-sha2-nistp384, ecdsa-sha2-nistp256, ecdsa-sha2-nistp521, " +
+        "ssh-rsa, rsa-sha2-256, rsa-sha2-512"
     static let ourEncryption =
         "aes256-gcm@openssh.com, aes128-gcm@openssh.com, " +
         "aes256-ctr, aes192-ctr, aes128-ctr"

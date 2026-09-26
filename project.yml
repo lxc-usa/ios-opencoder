@@ -21,8 +21,8 @@ packages:
     url: https://github.com/orlandos-nl/Citadel
     exactVersion: 0.12.1
   NIOSSH:
-    url: https://github.com/Wellz26/swift-nio-ssh.git
-    exactVersion: 0.3.4
+    # 本地 vendoring（含 RSA-SHA2 补丁），见 Vendor/swift-nio-ssh/PATCHES.md
+    path: Vendor/swift-nio-ssh
   SwiftNIO:
     url: https://github.com/apple/swift-nio.git
     from: 2.81.0
