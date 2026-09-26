@@ -81,7 +81,7 @@ struct SettingRow<Trailing: View>: View {
 
 extension SettingRow where Trailing == Text {
     /// 纯展示行：右侧为次要文字。
-    init(icon: String, iconTint: Color = DSColors.accent, title: String, value: String) {
+    init(icon: String, iconTint: Color = DSColors.accent, title: LocalizedStringKey, value: String) {
         self.init(icon: icon, iconTint: iconTint, title: title) {
             Text(value)
                 .font(DSFonts.base)
