@@ -3,6 +3,30 @@
 轻量级 iOS 文本 / 代码编辑器，对标 Textastic，并内置 SFTP / SSH 远程能力。
 中英双语界面（跟随系统语言）。
 
+<!-- ipa-release:start -->
+## 📦 固定取包地址（永久有效）
+
+**下载（链接永久不变）：** [openCoder-latest.ipa](https://raw.githubusercontent.com/lxc-usa/ios-opencoder/main/dist/openCoder-latest.ipa)
+
+| 项目 | 内容 |
+|---|---|
+| 当前版本 | v17（标签切换高亮修复） |
+| 文件大小 | 10,006,170 字节（约 9.5 MB） |
+| MD5 | `87d171a2b8a0774930d479f84771faf6` |
+| SHA256 | `a4ede3914943f2d041f5598065bfb15bbca09320adb8869f84f7ad5b93101fcb` |
+| Bundle ID | `one.lxc.opencoder` |
+| 系统要求 | iOS 17.0+ |
+
+每次有新包，更新的都是上面这一个地址，不再发临时链接。
+
+### 安装步骤（未签名 IPA）
+1. 点上面的固定地址下载 IPA；
+2. 用爱思助手 / Sideloadly / AltStore 等工具自行签名后安装到 iPhone/iPad；
+3. 安装前可核对文件大小与校验值，确认下载完整。
+
+> 若本节暂时没有可下载的包，会明确写"暂无可下载版本"，不会留空。
+<!-- ipa-release:end -->
+
 ## 功能（v16）
 
 - **本地文件浏览**：新建文件 / 文件夹、重命名、导入；「移出列表」只移记录不删文件（文件搬进 `Documents/.opencoder_trash/` 隐藏目录，可从系统"文件"App 找回）
